@@ -2,8 +2,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import os
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
 
 # Bot setup
 intents = discord.Intents.default()
@@ -407,20 +405,6 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
         
         await interaction.response.edit_message(content="✅ **Flight dispatched successfully!**", view=None, embed=None)
         await interaction.channel.send(embed=embed, view=view)
-
-# ==================== SIMPLE WEB SERVER FOR UPTIMEROBOT ====================
-
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b'Bot is alive!')
-
-def start_server():
-    server = HTTPServer(('0.0.0.0', 10000), Handler)
-    server.serve_forever()
-
-threading.Thread(target=start_server, daemon=True).start()
 
 # ==================== RUN THE BOT ====================
 
