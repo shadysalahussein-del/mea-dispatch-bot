@@ -424,82 +424,67 @@ AIRCRAFT_LIST = [
 
 # ==================== PERFORMANCE COMMAND ====================
 
-class PerformanceView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=120)
-        self.aircraft = None
-        self.load = None
-        self.data_type = None
-
 class AircraftSelect(discord.ui.Select):
     def __init__(self):
         options = [discord.SelectOption(label=ac, value=ac) for ac in AIRCRAFT_LIST[:25]]
         super().__init__(placeholder="Select or type to search aircraft...", options=options, min_values=1, max_values=1)
-    
+
     async def callback(self, interaction: discord.Interaction):
         self.view.aircraft = self.values[0]
-        await interaction.response.send_message(f"✈️ Aircraft: **{self.values[0]}**\n\nNow enter **Load %** (0-100):", ephemeral=True)
         
-        def check(m):
-            return m.author.id == interaction.user.id and m.channel.id == interaction.channel_id
-        
-        try:
-            msg = await interaction.client.wait_for('message', timeout=60.0, check=check)
-            load = msg.content.strip()
-            if not load.isdigit() or int(load) < 0 or int(load) > 100:
-                await interaction.followup.send("❌ Invalid load. Enter a number 0-100.", ephemeral=True)
-                return
+        class LoadModal(discord.ui.Modal, title="Enter Load Percentage"):
+            load_input = discord.ui.TextInput(
+                label="Load %",
+                placeholder="Enter a number between 0-100",
+                required=True,
+                min_length=1,
+                max_length=3
+            )
             
-            self.view.load = load
-            
-            class DataTypeSelect(discord.ui.Select):
-                def __init__(self):
-                    options = [
-                        discord.SelectOption(label="Takeoff Data", value="takeoff"),
-                        discord.SelectOption(label="Landing Data", value="landing"),
-                        discord.SelectOption(label="Cruise Data", value="cruise"),
-                        discord.SelectOption(label="All Data", value="all")
-                    ]
-                    super().__init__(placeholder="Select data type...", options=options, min_values=1, max_values=1)
+            async def on_submit(self, modal_interaction: discord.Interaction):
+                load = self.load_input.value
+                if not load.isdigit() or int(load) < 0 or int(load) > 100:
+                    await modal_interaction.response.send_message("❌ Invalid load. Enter 0-100.", ephemeral=True)
+                    return
                 
-                async def callback(self, interaction: discord.Interaction):
-                    self.view.data_type = self.values[0]
-                    await interaction.response.defer(ephemeral=True)
+                self.view.load = load
+                
+                class DataTypeSelect(discord.ui.Select):
+                    def __init__(self):
+                        options = [
+                            discord.SelectOption(label="Takeoff Data", value="takeoff"),
+                            discord.SelectOption(label="Landing Data", value="landing"),
+                            discord.SelectOption(label="Cruise Data", value="cruise"),
+                            discord.SelectOption(label="All Data", value="all")
+                        ]
+                        super().__init__(placeholder="Select data type...", options=options)
                     
-                    # Scrape data from flightSmart website
-                    url = "https://flightsmart.github.io/aircraftCalculator.html"
-                    
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(url) as response:
-                            html = await response.text()
-                    
-                    # Parse the HTML to find the data for this aircraft and load
-                    # This is a simplified version - full implementation needs to handle form submission
-                    soup = BeautifulSoup(html, 'html.parser')
-                    
-                    embed = discord.Embed(title=f"✈️ {self.view.aircraft} | {self.view.load}% Load", color=discord.Color.red())
-                    
-                    if self.view.data_type == "takeoff":
-                        embed.add_field(name="Takeoff Data", value="```\nTakeoff Power: 77% = 82% N1\nTakeoff Flaps: Flaps 2\nRotate: 112 kts\nAirborne by: 122 kts\n```", inline=False)
-                    elif self.view.data_type == "landing":
-                        embed.add_field(name="Landing Data", value="```\nLanding Flaps: Flaps 4\nFinal Approach: 126 kts\nFlare: 121 kts\nFlap Speeds: 1-230, 2-210, 3-210, 4-190, 5-170 kts\n```", inline=False)
-                    elif self.view.data_type == "cruise":
-                        embed.add_field(name="Cruise Data", value="```\nCruise Speed: 0.78 Mach\nWest/Even Cruise: 380\nEast/Odd Cruise: 370\nHigh Fuel Burn: 390\n```", inline=False)
-                    else:
-                        embed.add_field(name="Takeoff Data", value="```\nPower: 77% = 82% N1\nFlaps: 2\nRotate: 112 kts\nAirborne: 122 kts\n```", inline=True)
-                        embed.add_field(name="Landing Data", value="```\nFlaps: 4\nApproach: 126 kts\nFlare: 121 kts\n```", inline=True)
-                        embed.add_field(name="Cruise Data", value="```\nSpeed: 0.78 Mach\nWest: 380\nEast: 370\nHigh: 390\n```", inline=False)
-                    
-                    await interaction.edit_original_response(content=None, embed=embed)
-            
-            view = discord.ui.View()
-            view.add_item(DataTypeSelect())
-            view.aircraft = self.view.aircraft
-            view.load = self.view.load
-            await interaction.followup.send("Select data type:", view=view, ephemeral=True)
-            
-        except asyncio.TimeoutError:
-            await interaction.followup.send("❌ Timed out. Please run `/performance` again.", ephemeral=True)
+                    async def callback(self, select_interaction: discord.Interaction):
+                        self.view.data_type = self.values[0]
+                        await select_interaction.response.defer(ephemeral=True)
+                        
+                        embed = discord.Embed(title=f"✈️ {self.view.aircraft} | {self.view.load}% Load", color=discord.Color.red())
+                        
+                        if self.view.data_type == "takeoff":
+                            embed.add_field(name="Takeoff Data", value="```\nTakeoff Power: 77% = 82% N1\nTakeoff Flaps: Flaps 2\nRotate: 112 kts\nAirborne by: 122 kts\n```", inline=False)
+                        elif self.view.data_type == "landing":
+                            embed.add_field(name="Landing Data", value="```\nLanding Flaps: Flaps 4\nFinal Approach: 126 kts\nFlare: 121 kts\nFlap Speeds: 1-230, 2-210, 3-210, 4-190, 5-170 kts\n```", inline=False)
+                        elif self.view.data_type == "cruise":
+                            embed.add_field(name="Cruise Data", value="```\nCruise Speed: 0.78 Mach\nWest/Even Cruise: 380\nEast/Odd Cruise: 370\nHigh Fuel Burn: 390\n```", inline=False)
+                        else:
+                            embed.add_field(name="Takeoff Data", value="```\nPower: 77% = 82% N1\nFlaps: 2\nRotate: 112 kts\nAirborne: 122 kts\n```", inline=True)
+                            embed.add_field(name="Landing Data", value="```\nFlaps: 4\nApproach: 126 kts\nFlare: 121 kts\n```", inline=True)
+                            embed.add_field(name="Cruise Data", value="```\nSpeed: 0.78 Mach\nWest: 380\nEast: 370\nHigh: 390\n```", inline=False)
+                        
+                        await select_interaction.edit_original_response(content=None, embed=embed)
+                
+                view = discord.ui.View()
+                view.add_item(DataTypeSelect())
+                view.aircraft = self.view.aircraft
+                view.load = self.view.load
+                await modal_interaction.response.send_message("Select data type:", view=view, ephemeral=True)
+        
+        await interaction.response.send_modal(LoadModal())
 
 @bot.tree.command(name="performance", description="Get takeoff, landing, or cruise data for an aircraft")
 async def performance(interaction: discord.Interaction):
