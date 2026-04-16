@@ -2,6 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
 # Bot setup
 intents = discord.Intents.default()
@@ -413,4 +415,19 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
 # ==================== RUN THE BOT ====================
 
 TOKEN = os.getenv("TOKEN")
+
+# Simple web server to keep Render happy
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot is running')
+
+def run_server():
+    server = HTTPServer(('0.0.0.0', 10000), Handler)
+    server.serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
+
 bot.run(TOKEN)
+
