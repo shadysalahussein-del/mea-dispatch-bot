@@ -436,9 +436,7 @@ class AircraftSelect(discord.ui.Select):
             load_input = discord.ui.TextInput(
                 label="Load %",
                 placeholder="Enter a number between 0-100",
-                required=True,
-                min_length=1,
-                max_length=3
+                required=True
             )
             
             async def on_submit(self, modal_interaction: discord.Interaction):
@@ -466,15 +464,15 @@ class AircraftSelect(discord.ui.Select):
                         embed = discord.Embed(title=f"✈️ {self.view.aircraft} | {self.view.load}% Load", color=discord.Color.red())
                         
                         if self.view.data_type == "takeoff":
-                            embed.add_field(name="Takeoff Data", value="```\nTakeoff Power: 77% = 82% N1\nTakeoff Flaps: Flaps 2\nRotate: 112 kts\nAirborne by: 122 kts\n```", inline=False)
+                            embed.add_field(name="Takeoff Data", value="```\nTakeoff Power: 77% = 82% N1\nFlaps: Flaps 2\nRotate: 112 kts\nAirborne: 122 kts\n```", inline=False)
                         elif self.view.data_type == "landing":
                             embed.add_field(name="Landing Data", value="```\nLanding Flaps: Flaps 4\nFinal Approach: 126 kts\nFlare: 121 kts\nFlap Speeds: 1-230, 2-210, 3-210, 4-190, 5-170 kts\n```", inline=False)
                         elif self.view.data_type == "cruise":
-                            embed.add_field(name="Cruise Data", value="```\nCruise Speed: 0.78 Mach\nWest/Even Cruise: 380\nEast/Odd Cruise: 370\nHigh Fuel Burn: 390\n```", inline=False)
+                            embed.add_field(name="Cruise Data", value="```\nCruise Speed: 0.78 Mach\nWest/Even: 380\nEast/Odd: 370\nHigh Burn: 390\n```", inline=False)
                         else:
-                            embed.add_field(name="Takeoff Data", value="```\nPower: 77% = 82% N1\nFlaps: 2\nRotate: 112 kts\nAirborne: 122 kts\n```", inline=True)
-                            embed.add_field(name="Landing Data", value="```\nFlaps: 4\nApproach: 126 kts\nFlare: 121 kts\n```", inline=True)
-                            embed.add_field(name="Cruise Data", value="```\nSpeed: 0.78 Mach\nWest: 380\nEast: 370\nHigh: 390\n```", inline=False)
+                            embed.add_field(name="Takeoff", value="```\nPower: 77% N1\nFlaps: 2\nRotate: 112 kts\nAirborne: 122 kts\n```", inline=True)
+                            embed.add_field(name="Landing", value="```\nFlaps: 4\nApproach: 126 kts\nFlare: 121 kts\n```", inline=True)
+                            embed.add_field(name="Cruise", value="```\nSpeed: 0.78 Mach\nWest: 380\nEast: 370\nHigh: 390\n```", inline=False)
                         
                         await select_interaction.edit_original_response(content=None, embed=embed)
                 
