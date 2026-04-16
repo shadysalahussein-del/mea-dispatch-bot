@@ -239,11 +239,15 @@ async def on_ready():
 
 @bot.tree.command(name="dispatch-flight", description="Dispatch a new flight")
 async def dispatch_flight(interaction: discord.Interaction):
-    await interaction.response.send_message("✈️ **Flight Dispatch System**\nLet's start by selecting your departure airport.", ephemeral=True)
+    # Send initial public message
+    await interaction.response.send_message("✈️ **Flight Dispatch System**\nLet's start by selecting your departure airport.", ephemeral=False)
     
+    # Create dropdown for departure airports
     dep_options = [discord.SelectOption(label=f"{code} - {AIRPORT_INFO[code]['city']}", value=code) for code in AIRPORT_CODES]
     dep_view = DepSelectView(dep_options)
-    await interaction.followup.send("📍 **Select your departure airport:**", view=dep_view, ephemeral=True)
+    
+    # Edit the message to add the dropdown
+    await interaction.edit_original_response(content="✈️ **Flight Dispatch System**\n📍 **Select your departure airport:**", view=dep_view)
 
 class DepSelectView(discord.ui.View):
     def __init__(self, options):
