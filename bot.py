@@ -403,7 +403,7 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
         embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.route_data['flight_time']}", inline=False)
         embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.dep_time.value}", inline=False)
         embed.add_field(name="\u200b", value=f"**📊 Status:** {self.status}", inline=False)
-        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilot:** {interaction.user.display_name}", inline=False)
+        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilot:** <@{interaction.user.id}>", inline=False)
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {flight_data['notes']}", inline=False)
         embed.set_footer(text=f"Dispatched by: {interaction.user.display_name}")
         
