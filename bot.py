@@ -412,6 +412,18 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
         await interaction.response.edit_message(content="✅ **Flight dispatched successfully!**", view=None, embed=None)
         await interaction.channel.send(embed=embed, view=view)
 
+# Aircraft list for performance command
+AIRCRAFT_LIST = [
+    "A220", "A318", "A319", "A320", "A321", "A333", "A339", "A346", "A359", "A388",
+    "B712", "B737", "B38M", "B738", "B739", "B742", "B744", "B748", "B752", "B763", "B772", "B77L",
+    "CL350", "CRJ2", "CRJ7", "CRJ9", "CRJX", "DH8D", "DC10", "DC1F", "MD11", "MD1F", "E175", "E190"
+]
+
+# ==================== PERFORMANCE COMMAND ====================
+
+@bot.tree.command(name="performance", description="Get takeoff, landing, or cruise data for an aircraft")
+async def performance(interaction: discord.Interaction):
+    await interaction.response.send_message("✈️ Performance calculator coming soon!", ephemeral=True)
 # ==================== RUN THE BOT ====================
 
 TOKEN = os.getenv("TOKEN")
