@@ -2,6 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import os
+from flask import Flask
+import threading
 
 # Bot setup
 intents = discord.Intents.default()
@@ -408,4 +410,20 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
 
 # Run the bot
 TOKEN = os.getenv("TOKEN")
+# Keep-alive web server for Render
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run():
+    app.run(host='0.0.0.0', port=10000)
+
+def keep_alive():
+    t = threading.Thread(target=run)
+    t.start()
+
+# Start the keep-alive server
+keep_alive()
 bot.run(TOKEN)
