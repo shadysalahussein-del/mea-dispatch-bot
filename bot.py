@@ -179,25 +179,34 @@ class DispatchView(discord.ui.View):
         self.thread_id = None
         self.pilots = [author_id]
         self.is_landed = False
-        
+
     @discord.ui.button(label="Join Flight", style=discord.ButtonStyle.primary)
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.is_landed:
             await interaction.response.send_message("❌ This flight has already landed. Cannot join.", ephemeral=True)
             return
         
+        # Dispatcher cannot join their own flight
+        if interaction.user.id == self.author_id:
+            await interaction.response.send_message("❌ You are the flight captain. You cannot join your own flight.", ephemeral=True)
+            return
+        
         user_id = interaction.user.id
         
-        # NO RESTRICTIONS - add anyone, even captain, even duplicates
+        # Check if already joined
+        if user_id in self.pilots:
+            await interaction.response.send_message("❌ You have already joined this flight.", ephemeral=True)
+            return
+        
+        # Add the pilot
         self.pilots.append(user_id)
         
         if not self.thread_id:
-            # Create thread UNDER the dispatch message (linked thread)
             thread = await interaction.message.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion")
             self.thread_id = thread.id
             await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\n\n{interaction.user.mention} has joined the flight!")
         else:
-            await interaction.response.send_message(f"{interaction.user.mention} has joined the flight!", ephemeral=False)
+            await interaction.response.send_message(f"{interaction.user.mention} has joined the flight!", ephemeral=True)
             thread = interaction.guild.get_thread(self.thread_id)
             if thread:
                 await thread.send(f"✈️ {interaction.user.mention} has joined the flight!")
@@ -214,7 +223,7 @@ class DispatchView(discord.ui.View):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
         
-        await interaction.message.edit(embed=embed, view=self)
+        await interaction.message.edit(embed=embed, view=self)        
     
     @discord.ui.button(label="Update Status", style=discord.ButtonStyle.secondary)
     async def status_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -339,6 +348,7 @@ class StatusSelectView(discord.ui.View):
         discord.SelectOption(label="Landed", description="Landed at destination", emoji="🛬"),
         discord.SelectOption(label="Cancelled", description="Flight cancelled", emoji="❌"),
     ])
+
     async def status_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
         status = select.values[0]
         
@@ -360,7 +370,13 @@ class StatusSelectView(discord.ui.View):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
         
-        await interaction.message.edit(embed=embed, view=self.parent_view)
+        # Create a new view to refresh the buttons
+        new_view = DispatchView(self.flight_data, self.author_id)
+        new_view.thread_id = self.thread_id
+        new_view.pilots = self.pilots
+        new_view.is_landed = self.parent_view.is_landed
+        
+        await interaction.message.edit(embed=embed, view=new_view)
         
         if self.thread_id:
             thread = interaction.guild.get_thread(self.thread_id)
