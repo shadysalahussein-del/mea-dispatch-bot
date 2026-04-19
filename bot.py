@@ -4,7 +4,6 @@ from discord.ext import commands
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
-from typing import Optional
 
 # Bot setup
 intents = discord.Intents.default()
@@ -124,7 +123,6 @@ AIRPORT_INFO = {
 
 AIRPORT_CODES = list(AIRPORT_INFO.keys())
 
-# Build destination map
 DESTINATIONS = {}
 for route_key, route_data in ROUTES.items():
     dep_code = route_key.split("_")[0]
@@ -179,7 +177,7 @@ class DispatchView(discord.ui.View):
         self.flight_data = flight_data
         self.author_id = author_id
         self.thread_id = None
-        self.pilots = [f"<@{author_id}>"]
+        self.pilots = [author_id]
         self.is_landed = False
         
     @discord.ui.button(label="Join Flight", style=discord.ButtonStyle.primary)
@@ -188,32 +186,47 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("❌ This flight has already landed. Cannot join.", ephemeral=True)
             return
         
-        user_id_str = f"<@{interaction.user.id}>"
+        user_id = interaction.user.id
         
-        # Add the pilot (captain can join for testing)
-        if user_id_str not in self.pilots:
-            self.pilots.append(user_id_str)
+        if user_id in self.pilots:
+            await interaction.response.send_message("❌ You have already joined this flight.", ephemeral=True)
+            return
         
-        # Create thread if this is the first join after captain
-        if len(self.pilots) >= 2 and not self.thread_id:
+        self.pilots.append(user_id)
+        
+        if not self.thread_id:
             thread = await interaction.channel.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion", type=discord.ChannelType.private_thread)
             self.thread_id = thread.id
-            await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\n\n{user_id_str} has joined the flight!")
-            await interaction.response.send_message(f"{user_id_str} has joined the flight! A private thread has been created.", ephemeral=False)
+            await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\n\n{interaction.user.mention} has joined the flight!")
+            await interaction.response.send_message(f"{interaction.user.mention} has joined the flight! A private thread has been created.", ephemeral=False)
         else:
-            await interaction.response.send_message(f"{user_id_str} has joined the flight!", ephemeral=False)
-            if self.thread_id:
-                thread = interaction.guild.get_thread(self.thread_id)
-                if thread:
-                    await thread.send(f"✈️ {user_id_str} has joined the flight!")
+            await interaction.response.send_message(f"{interaction.user.mention} has joined the flight!", ephemeral=False)
+            thread = interaction.guild.get_thread(self.thread_id)
+            if thread:
+                await thread.send(f"✈️ {interaction.user.mention} has joined the flight!")
+        
+        # Update the embed to show new pilots list
+        pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
+        embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
+        embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
+        embed.add_field(name="\u200b", value=f"**✈️ Aircraft:** {self.flight_data['aircraft']}", inline=False)
+        embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.flight_data['flight_time']}", inline=False)
+        embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.flight_data['dep_time']}", inline=False)
+        embed.add_field(name="\u200b", value=f"**📊 Status:** {self.flight_data['status']}", inline=False)
+        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(pilot_mentions)}", inline=False)
+        embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
+        embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
+        
+        await interaction.message.edit(embed=embed, view=self)
     
     @discord.ui.button(label="Update Status", style=discord.ButtonStyle.secondary)
     async def status_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.is_landed:
             await interaction.response.send_message("❌ This flight has already landed. Cannot update status.", ephemeral=True)
             return
-        if interaction.user.id != self.author_id and f"<@{interaction.user.id}>" not in self.pilots:
-            await interaction.response.send_message("Only pilots who joined this flight can update status.", ephemeral=True)
+        
+        if interaction.user.id not in self.pilots:
+            await interaction.response.send_message("❌ Only pilots who joined this flight can update status.", ephemeral=True)
             return
         
         view = StatusSelectView(self.flight_data, self.author_id, self.thread_id, self.pilots, self)
@@ -225,7 +238,7 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("❌ This flight has already landed. Cannot assign gates.", ephemeral=True)
             return
         if interaction.user.id != self.author_id:
-            await interaction.response.send_message("Only the flight captain can assign gates.", ephemeral=True)
+            await interaction.response.send_message("❌ Only the flight captain can assign gates.", ephemeral=True)
             return
         
         modal = GateAssignmentModal(self.pilots)
@@ -245,13 +258,14 @@ class ConfirmLandedView(discord.ui.View):
         self.parent_view.is_landed = True
         self.flight_data['status'] = "Landed"
         
+        pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
         embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
         embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
         embed.add_field(name="\u200b", value=f"**✈️ Aircraft:** {self.flight_data['aircraft']}", inline=False)
         embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.flight_data['flight_time']}", inline=False)
         embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.flight_data['dep_time']}", inline=False)
         embed.add_field(name="\u200b", value=f"**📊 Status:** Landed", inline=False)
-        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(self.pilots)}", inline=False)
+        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(pilot_mentions)}", inline=False)
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}> | Flight Completed")
         
@@ -299,13 +313,14 @@ class StatusSelectView(discord.ui.View):
         
         self.flight_data['status'] = status
         
+        pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
         embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
         embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
         embed.add_field(name="\u200b", value=f"**✈️ Aircraft:** {self.flight_data['aircraft']}", inline=False)
         embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.flight_data['flight_time']}", inline=False)
         embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.flight_data['dep_time']}", inline=False)
         embed.add_field(name="\u200b", value=f"**📊 Status:** {status}", inline=False)
-        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(self.pilots)}", inline=False)
+        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(pilot_mentions)}", inline=False)
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
         
