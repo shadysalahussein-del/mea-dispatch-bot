@@ -137,7 +137,6 @@ for route_key, route_data in ROUTES.items():
 # ==================== AUTO-COMPLETE FUNCTIONS ====================
 
 def get_airport_choices(current: str) -> list:
-    """Return airports matching the current input (ICAO or city name)"""
     current_lower = current.lower()
     matches = []
     for code, info in AIRPORT_INFO.items():
@@ -189,22 +188,34 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("❌ This flight has already landed. Cannot join.", ephemeral=True)
             return
         
-        # TEMPORARY: Allow captain to join for testing (remove this comment and the line below to restore original)
+        # TEMPORARY: Allow captain to join for testing
         # if interaction.user.id == self.author_id:
         #     await interaction.response.send_message("You are the flight captain! You can't join your own flight.", ephemeral=True)
         #     return
         
         user_id_str = f"<@{interaction.user.id}>"
-        if user_id_str not in self.pilots:
-            self.pilots.append(user_id_str)
-            await interaction.response.send_message(f"{user_id_str} has joined the flight!", ephemeral=False)
-            
-            if not self.thread_id:
-                thread = await interaction.channel.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion", type=discord.ChannelType.public_thread)
-                self.thread_id = thread.id
-                await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\nPilots: {', '.join(self.pilots)}")
+        
+        # Check if user already joined
+        if user_id_str in self.pilots:
+            await interaction.response.send_message("❌ You have already joined this flight.", ephemeral=True)
+            return
+        
+        # Add the pilot
+        self.pilots.append(user_id_str)
+        
+        # Create thread only once (when first person joins after captain)
+        if not self.thread_id and len(self.pilots) > 1:
+            thread = await interaction.channel.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion", type=discord.ChannelType.private_thread)
+            self.thread_id = thread.id
+            await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\nPilots: {', '.join(self.pilots)}")
+            await interaction.response.send_message(f"{user_id_str} has joined the flight! A private thread has been created.", ephemeral=False)
         else:
-            await interaction.response.send_message("You already joined this flight!", ephemeral=True)
+            await interaction.response.send_message(f"{user_id_str} has joined the flight!", ephemeral=False)
+            # If thread already exists, add the new pilot to it
+            if self.thread_id:
+                thread = interaction.guild.get_thread(self.thread_id)
+                if thread:
+                    await thread.send(f"✈️ {user_id_str} has joined the flight!")
     
     @discord.ui.button(label="Update Status", style=discord.ButtonStyle.secondary)
     async def status_button(self, interaction: discord.Interaction, button: discord.ui.Button):
