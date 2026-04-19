@@ -172,13 +172,14 @@ class DisabledView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Assign Gates", style=discord.ButtonStyle.success, disabled=True))
 
 class DispatchView(discord.ui.View):
-    def __init__(self, flight_data, author_id):
+    def __init__(self, flight_data, author_id, message_id=None):
         super().__init__(timeout=None)
         self.flight_data = flight_data
         self.author_id = author_id
         self.thread_id = None
         self.pilots = [author_id]
         self.is_landed = False
+        self.message_id = message_id
         
     @discord.ui.button(label="Join Flight", style=discord.ButtonStyle.primary)
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -389,6 +390,7 @@ class StatusSelectView(discord.ui.View):
         new_view.pilots = self.pilots.copy()
         new_view.is_landed = self.parent_view.is_landed
         
+        # Use the original message from the parent view
         await interaction.message.edit(embed=embed, view=new_view)
         
         if self.thread_id:
