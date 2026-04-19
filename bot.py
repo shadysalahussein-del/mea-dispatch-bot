@@ -4,7 +4,7 @@ from discord.ext import commands
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
-import asyncio
+from typing import Optional
 
 # Bot setup
 intents = discord.Intents.default()
@@ -124,6 +124,7 @@ AIRPORT_INFO = {
 
 AIRPORT_CODES = list(AIRPORT_INFO.keys())
 
+# Build destination map
 DESTINATIONS = {}
 for route_key, route_data in ROUTES.items():
     dep_code = route_key.split("_")[0]
@@ -133,7 +134,40 @@ for route_key, route_data in ROUTES.items():
     if arr_code not in DESTINATIONS[dep_code]:
         DESTINATIONS[dep_code].append(arr_code)
 
-# ==================== BOT CODE ====================
+# ==================== AUTO-COMPLETE FUNCTIONS ====================
+
+def get_airport_choices(current: str) -> list:
+    """Return airports matching the current input (ICAO or city name)"""
+    current_lower = current.lower()
+    matches = []
+    for code, info in AIRPORT_INFO.items():
+        if current_lower in code.lower() or current_lower in info['city'].lower():
+            matches.append(app_commands.Choice(name=f"{code} - {info['city']}", value=code))
+    return matches[:25]  # Discord limits to 25 choices
+
+async def departure_autocomplete(interaction: discord.Interaction, current: str) -> list:
+    return get_airport_choices(current)
+
+async def arrival_autocomplete(interaction: discord.Interaction, current: str) -> list:
+    # Get the departure from the command's namespace
+    departure = interaction.namespace.departure
+    if not departure:
+        return []
+    
+    current_lower = current.lower()
+    matches = []
+    
+    # Only show destinations available from this departure
+    if departure in DESTINATIONS:
+        for code in DESTINATIONS[departure]:
+            info = AIRPORT_INFO.get(code)
+            if info:
+                if current_lower in code.lower() or current_lower in info['city'].lower():
+                    matches.append(app_commands.Choice(name=f"{code} - {info['city']}", value=code))
+    
+    return matches[:25]
+
+# ==================== BUTTON VIEWS ====================
 
 class DisabledView(discord.ui.View):
     """View with disabled buttons (used after flight is landed)"""
@@ -198,14 +232,13 @@ class DispatchView(discord.ui.View):
         await interaction.response.send_modal(modal)
 
 class ConfirmLandedView(discord.ui.View):
-    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view, new_status):
+    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view):
         super().__init__(timeout=60)
         self.flight_data = flight_data
         self.author_id = author_id
         self.thread_id = thread_id
         self.pilots = pilots
         self.parent_view = parent_view
-        self.new_status = new_status
     
     @discord.ui.button(label="Yes, Confirm Landed", style=discord.ButtonStyle.danger)
     async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -222,7 +255,6 @@ class ConfirmLandedView(discord.ui.View):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}> | Flight Completed")
         
-        # Replace with disabled view
         await interaction.message.edit(embed=embed, view=DisabledView())
         
         if self.thread_id:
@@ -261,8 +293,7 @@ class StatusSelectView(discord.ui.View):
         status = select.values[0]
         
         if status == "Landed":
-            # Show confirmation dialog
-            confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view, status)
+            confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view)
             await interaction.response.send_message("⚠️ **Confirm Status Change**\nAre you sure you want to change the status to **Landed**?\n\nAfter confirming, all buttons will be disabled and the flight will be closed.", view=confirm_view, ephemeral=True)
             return
         
@@ -298,91 +329,25 @@ class GateAssignmentModal(discord.ui.Modal, title="Assign Gates"):
         assignments_text = self.assignments.value
         await interaction.response.send_message(f"**🚪 Gate Assignments:**\n{assignments_text}", ephemeral=False)
 
-@bot.event
-async def on_ready():
-    print(f'✅ Bot is online! Logged in as {bot.user}')
-    try:
-        synced = await bot.tree.sync()
-        print(f"✅ Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"Error syncing commands: {e}")
-
-@bot.tree.command(name="dispatch-flight", description="Dispatch a new flight")
-async def dispatch_flight(interaction: discord.Interaction):
-    # Send initial public message
-    await interaction.response.send_message("✈️ **Flight Dispatch System**\nLet's start by selecting your departure airport.", ephemeral=False)
-    
-    # Create dropdown for departure airports
-    dep_options = [discord.SelectOption(label=f"{code} - {AIRPORT_INFO[code]['city']}", value=code) for code in AIRPORT_CODES]
-    dep_view = DepSelectView(dep_options)
-    
-    # Edit the message to add the dropdown
-    await interaction.edit_original_response(content="✈️ **Flight Dispatch System**\n📍 **Select your departure airport:**", view=dep_view)
-
-class DepSelectView(discord.ui.View):
-    def __init__(self, options):
-        super().__init__(timeout=120)
-        self.add_item(DepSelect(options))
-
-class DepSelect(discord.ui.Select):
-    def __init__(self, options):
-        super().__init__(placeholder="Choose departure airport...", options=options[:25])
-    
-    async def callback(self, interaction: discord.Interaction):
-        self.view.departure = self.values[0]
-        if self.values[0] in DESTINATIONS:
-            arr_codes = DESTINATIONS[self.values[0]]
-            arr_options = [discord.SelectOption(label=f"{code} - {AIRPORT_INFO[code]['city']}", value=code) for code in arr_codes if code in AIRPORT_INFO]
-        else:
-            arr_options = []
-        
-        if not arr_options:
-            await interaction.response.edit_message(content="❌ No destinations available from this airport!", view=None)
-            return
-        
-        arr_view = ArrSelectView(arr_options, self.values[0])
-        await interaction.response.edit_message(content="📍 **Select your arrival airport:**", view=arr_view)
-
-class ArrSelectView(discord.ui.View):
-    def __init__(self, options, departure):
-        super().__init__(timeout=120)
-        self.departure = departure
-        self.add_item(ArrSelect(options, departure))
-
-class ArrSelect(discord.ui.Select):
-    def __init__(self, options, departure):
-        super().__init__(placeholder="Choose arrival airport...", options=options[:25])
-        self.departure = departure
-    
-    async def callback(self, interaction: discord.Interaction):
-        route_key = f"{self.departure}_{self.values[0]}"
-        if route_key in ROUTES:
-            route_data = ROUTES[route_key]
-            flight_options = [discord.SelectOption(label=route_data['flight'], value=route_data['flight'])]
-            
-            flight_view = FlightSelectView(flight_options, self.departure, self.values[0], route_data)
-            await interaction.response.edit_message(content="✈️ **Select your flight number:**", view=flight_view)
-        else:
-            await interaction.response.edit_message(content="❌ No flight found for this route!", view=None)
+# ==================== FLOW CLASSES (for dispatch steps) ====================
 
 class FlightSelectView(discord.ui.View):
-    def __init__(self, options, departure, arrival, route_data):
+    def __init__(self, flight_options, departure, arrival, route_data):
         super().__init__(timeout=120)
         self.departure = departure
         self.arrival = arrival
         self.route_data = route_data
-        self.add_item(FlightSelect(options, departure, arrival, route_data))
+        self.add_item(FlightSelect(flight_options, departure, arrival, route_data))
 
 class FlightSelect(discord.ui.Select):
     def __init__(self, options, departure, arrival, route_data):
-        super().__init__(placeholder="Choose flight...", options=options)
+        super().__init__(placeholder="Select flight number...", options=options)
         self.departure = departure
         self.arrival = arrival
         self.route_data = route_data
     
     async def callback(self, interaction: discord.Interaction):
         aircraft_options = [discord.SelectOption(label=ac, value=ac) for ac in self.route_data['aircraft']]
-        
         aircraft_view = AircraftSelectView(aircraft_options, self.departure, self.arrival, self.values[0], self.route_data)
         await interaction.response.edit_message(content="✈️ **Select your aircraft:**", view=aircraft_view)
 
@@ -416,6 +381,11 @@ class StatusSelectSimpleView(discord.ui.View):
         self.aircraft = aircraft
         self.route_data = route_data
         self.add_item(StatusSelectSimple(departure, arrival, flight, aircraft, route_data))
+    
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ Flight dispatch cancelled.", view=None)
+        self.stop()
 
 class StatusSelectSimple(discord.ui.Select):
     def __init__(self, departure, arrival, flight, aircraft, route_data):
@@ -480,7 +450,44 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
         await interaction.response.edit_message(content="✅ **Flight dispatched successfully!**", view=None, embed=None)
         await interaction.channel.send(embed=embed, view=view)
 
+# ==================== MAIN COMMAND ====================
+
+@bot.tree.command(name="dispatch-flight", description="Dispatch a new flight")
+@app_commands.describe(departure="Departure airport (ICAO code or city name)", arrival="Arrival airport (ICAO code or city name)")
+@app_commands.autocomplete(departure=departure_autocomplete, arrival=arrival_autocomplete)
+async def dispatch_flight(interaction: discord.Interaction, departure: str, arrival: str):
+    # Validate departure
+    if departure not in AIRPORT_INFO:
+        await interaction.response.send_message(f"❌ Departure airport '{departure}' not found. Please use a valid ICAO code or city name.", ephemeral=True)
+        return
+    
+    # Validate arrival
+    if arrival not in AIRPORT_INFO:
+        await interaction.response.send_message(f"❌ Arrival airport '{arrival}' not found. Please use a valid ICAO code or city name.", ephemeral=True)
+        return
+    
+    # Check if route exists
+    route_key = f"{departure}_{arrival}"
+    if route_key not in ROUTES:
+        await interaction.response.send_message(f"❌ No direct flight found from {departure} to {arrival}.", ephemeral=True)
+        return
+    
+    route_data = ROUTES[route_key]
+    flight_options = [discord.SelectOption(label=route_data['flight'], value=route_data['flight'])]
+    
+    flight_view = FlightSelectView(flight_options, departure, arrival, route_data)
+    await interaction.response.send_message(f"✈️ **Flight from {departure} to {arrival}**\n\nSelect your flight number:", view=flight_view, ephemeral=True)
+
 # ==================== RUN THE BOT ====================
+
+@bot.event
+async def on_ready():
+    print(f'✅ Bot is online! Logged in as {bot.user}')
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Error syncing commands: {e}")
 
 TOKEN = os.getenv("TOKEN")
 
