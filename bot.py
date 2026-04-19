@@ -188,10 +188,7 @@ class DispatchView(discord.ui.View):
         
         user_id = interaction.user.id
         
-        if user_id in self.pilots:
-            await interaction.response.send_message("❌ You have already joined this flight.", ephemeral=True)
-            return
-        
+        # NO RESTRICTIONS - add anyone, even captain, even duplicates
         self.pilots.append(user_id)
         
         if not self.thread_id:
@@ -205,7 +202,7 @@ class DispatchView(discord.ui.View):
             if thread:
                 await thread.send(f"✈️ {interaction.user.mention} has joined the flight!")
         
-        # Update the embed to show new pilots list
+        # Update the embed to show all pilots
         pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
         embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
         embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
@@ -225,10 +222,6 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("❌ This flight has already landed. Cannot update status.", ephemeral=True)
             return
         
-        if interaction.user.id not in self.pilots:
-            await interaction.response.send_message("❌ Only pilots who joined this flight can update status.", ephemeral=True)
-            return
-        
         view = StatusSelectView(self.flight_data, self.author_id, self.thread_id, self.pilots, self)
         await interaction.response.send_message("Select flight status:", view=view, ephemeral=True)
     
@@ -238,7 +231,7 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("❌ This flight has already landed. Cannot assign gates.", ephemeral=True)
             return
         if interaction.user.id != self.author_id:
-            await interaction.response.send_message("❌ Only the flight captain can assign gates.", ephemeral=True)
+            await interaction.response.send_message("Only the flight captain can assign gates.", ephemeral=True)
             return
         
         modal = GateAssignmentModal(self.pilots)
