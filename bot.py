@@ -192,7 +192,8 @@ class DispatchView(discord.ui.View):
         self.pilots.append(user_id)
         
         if not self.thread_id:
-            thread = await interaction.channel.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion", type=discord.ChannelType.private_thread)
+            # Create thread UNDER the dispatch message (linked thread)
+            thread = await interaction.message.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion")
             self.thread_id = thread.id
             await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\n\n{interaction.user.mention} has joined the flight!")
             await interaction.response.send_message(f"{interaction.user.mention} has joined the flight! A private thread has been created.", ephemeral=False)
@@ -234,8 +235,51 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("Only the flight captain can assign gates.", ephemeral=True)
             return
         
-        modal = GateAssignmentModal(self.pilots)
+        modal = GateAssignmentModal(self.pilots, self.thread_id, interaction.guild)
         await interaction.response.send_modal(modal)
+
+class GateAssignmentModal(discord.ui.Modal, title="Assign Gates"):
+    def __init__(self, pilots, thread_id, guild):
+        super().__init__()
+        self.pilots = pilots
+        self.thread_id = thread_id
+        self.guild = guild
+        
+    assignments = discord.ui.TextInput(label="Gate Assignments", placeholder="Example: MEAV001: A5, MEAV002: A6", style=discord.TextStyle.paragraph, required=True)
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        assignments_text = self.assignments.value
+        thread = self.guild.get_thread(self.thread_id) if self.thread_id else None
+        
+        result_message = "**🚪 Gate Assignments:**\n"
+        
+        parts = [p.strip() for p in assignments_text.split(',')]
+        
+        for part in parts:
+            if ':' in part:
+                callsign_part, gate = part.split(':', 1)
+                callsign_part = callsign_part.strip()
+                gate = gate.strip()
+                
+                found_user = None
+                for member in self.guild.members:
+                    if member.nick and callsign_part in member.nick:
+                        found_user = member
+                        break
+                    elif callsign_part in member.name:
+                        found_user = member
+                        break
+                
+                if found_user:
+                    result_message += f"{found_user.mention} has been assigned to gate: **{gate}**\n"
+                else:
+                    result_message += f"❌ User with callsign `{callsign_part}` not found.\n"
+        
+        if thread:
+            await thread.send(result_message)
+            await interaction.response.send_message("✅ Gate assignments have been posted in the flight thread!", ephemeral=True)
+        else:
+            await interaction.response.send_message(result_message, ephemeral=False)
 
 class ConfirmLandedView(discord.ui.View):
     def __init__(self, flight_data, author_id, thread_id, pilots, parent_view):
@@ -325,17 +369,6 @@ class StatusSelectView(discord.ui.View):
                 await thread.send(f"**📢 Status Update**\n✈️ Flight {self.flight_data['flight']} status changed to: **{status}**\nUpdated by: {interaction.user.mention}")
         
         await interaction.response.send_message(f"✅ Flight status updated to: {status}", ephemeral=True)
-
-class GateAssignmentModal(discord.ui.Modal, title="Assign Gates"):
-    def __init__(self, pilots):
-        super().__init__()
-        self.pilots = pilots
-        
-    assignments = discord.ui.TextInput(label="Gate Assignments", placeholder="Example: MEAV001: A5, MEAV002: A6", style=discord.TextStyle.paragraph, required=True)
-    
-    async def on_submit(self, interaction: discord.Interaction):
-        assignments_text = self.assignments.value
-        await interaction.response.send_message(f"**🚪 Gate Assignments:**\n{assignments_text}", ephemeral=False)
 
 # ==================== FLOW CLASSES ====================
 
