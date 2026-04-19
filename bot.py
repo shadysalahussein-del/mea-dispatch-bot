@@ -4,9 +4,7 @@ from discord.ext import commands
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
-import aiohttp
 import asyncio
-from bs4 import BeautifulSoup
 
 # Bot setup
 intents = discord.Intents.default()
@@ -137,6 +135,14 @@ for route_key, route_data in ROUTES.items():
 
 # ==================== BOT CODE ====================
 
+class DisabledView(discord.ui.View):
+    """View with disabled buttons (used after flight is landed)"""
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(discord.ui.Button(label="Join Flight", style=discord.ButtonStyle.primary, disabled=True))
+        self.add_item(discord.ui.Button(label="Update Status", style=discord.ButtonStyle.secondary, disabled=True))
+        self.add_item(discord.ui.Button(label="Assign Gates", style=discord.ButtonStyle.success, disabled=True))
+
 class DispatchView(discord.ui.View):
     def __init__(self, flight_data, author_id):
         super().__init__(timeout=None)
@@ -144,9 +150,13 @@ class DispatchView(discord.ui.View):
         self.author_id = author_id
         self.thread_id = None
         self.pilots = [f"<@{author_id}>"]
+        self.is_landed = False
         
     @discord.ui.button(label="Join Flight", style=discord.ButtonStyle.primary)
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_landed:
+            await interaction.response.send_message("❌ This flight has already landed. Cannot join.", ephemeral=True)
+            return
         if interaction.user.id == self.author_id:
             await interaction.response.send_message("You are the flight captain! You can't join your own flight.", ephemeral=True)
             return
@@ -165,15 +175,21 @@ class DispatchView(discord.ui.View):
     
     @discord.ui.button(label="Update Status", style=discord.ButtonStyle.secondary)
     async def status_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_landed:
+            await interaction.response.send_message("❌ This flight has already landed. Cannot update status.", ephemeral=True)
+            return
         if interaction.user.id != self.author_id and f"<@{interaction.user.id}>" not in self.pilots:
             await interaction.response.send_message("Only pilots who joined this flight can update status.", ephemeral=True)
             return
         
-        view = StatusSelectView(self.flight_data, self.author_id, self.thread_id, self.pilots)
+        view = StatusSelectView(self.flight_data, self.author_id, self.thread_id, self.pilots, self)
         await interaction.response.send_message("Select flight status:", view=view, ephemeral=True)
     
     @discord.ui.button(label="Assign Gates", style=discord.ButtonStyle.success)
     async def gates_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.is_landed:
+            await interaction.response.send_message("❌ This flight has already landed. Cannot assign gates.", ephemeral=True)
+            return
         if interaction.user.id != self.author_id:
             await interaction.response.send_message("Only the flight captain can assign gates.", ephemeral=True)
             return
@@ -181,13 +197,55 @@ class DispatchView(discord.ui.View):
         modal = GateAssignmentModal(self.pilots)
         await interaction.response.send_modal(modal)
 
-class StatusSelectView(discord.ui.View):
-    def __init__(self, flight_data, author_id, thread_id, pilots):
+class ConfirmLandedView(discord.ui.View):
+    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view, new_status):
         super().__init__(timeout=60)
         self.flight_data = flight_data
         self.author_id = author_id
         self.thread_id = thread_id
         self.pilots = pilots
+        self.parent_view = parent_view
+        self.new_status = new_status
+    
+    @discord.ui.button(label="Yes, Confirm Landed", style=discord.ButtonStyle.danger)
+    async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.parent_view.is_landed = True
+        self.flight_data['status'] = "Landed"
+        
+        embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
+        embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
+        embed.add_field(name="\u200b", value=f"**✈️ Aircraft:** {self.flight_data['aircraft']}", inline=False)
+        embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.flight_data['flight_time']}", inline=False)
+        embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.flight_data['dep_time']}", inline=False)
+        embed.add_field(name="\u200b", value=f"**📊 Status:** Landed", inline=False)
+        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(self.pilots)}", inline=False)
+        embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
+        embed.set_footer(text=f"Dispatched by: <@{self.author_id}> | Flight Completed")
+        
+        # Replace with disabled view
+        await interaction.message.edit(embed=embed, view=DisabledView())
+        
+        if self.thread_id:
+            thread = interaction.guild.get_thread(self.thread_id)
+            if thread:
+                await thread.send(f"**📢 Flight Completed**\n✈️ Flight {self.flight_data['flight']} has landed. This flight is now closed.")
+        
+        await interaction.response.send_message("✅ Flight status updated to Landed. Buttons have been disabled.", ephemeral=True)
+        self.stop()
+    
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Status update cancelled.", ephemeral=True)
+        self.stop()
+
+class StatusSelectView(discord.ui.View):
+    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view):
+        super().__init__(timeout=60)
+        self.flight_data = flight_data
+        self.author_id = author_id
+        self.thread_id = thread_id
+        self.pilots = pilots
+        self.parent_view = parent_view
     
     @discord.ui.select(placeholder="Choose flight status...", options=[
         discord.SelectOption(label="Pre-flight Check", description="Before departure", emoji="✅"),
@@ -201,6 +259,13 @@ class StatusSelectView(discord.ui.View):
     ])
     async def status_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
         status = select.values[0]
+        
+        if status == "Landed":
+            # Show confirmation dialog
+            confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view, status)
+            await interaction.response.send_message("⚠️ **Confirm Status Change**\nAre you sure you want to change the status to **Landed**?\n\nAfter confirming, all buttons will be disabled and the flight will be closed.", view=confirm_view, ephemeral=True)
+            return
+        
         self.flight_data['status'] = status
         
         embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
@@ -213,7 +278,7 @@ class StatusSelectView(discord.ui.View):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
         
-        await interaction.message.edit(embed=embed, view=DispatchView(self.flight_data, self.author_id))
+        await interaction.message.edit(embed=embed, view=self.parent_view)
         
         if self.thread_id:
             thread = interaction.guild.get_thread(self.thread_id)
@@ -227,7 +292,7 @@ class GateAssignmentModal(discord.ui.Modal, title="Assign Gates"):
         super().__init__()
         self.pilots = pilots
         
-    assignments = discord.ui.TextInput(label="Gate Assignments", placeholder="Example: SVA008: A5, SVA366: B2", style=discord.TextStyle.paragraph, required=True)
+    assignments = discord.ui.TextInput(label="Gate Assignments", placeholder="Example: MEAV001: A5, MEAV002: A6", style=discord.TextStyle.paragraph, required=True)
     
     async def on_submit(self, interaction: discord.Interaction):
         assignments_text = self.assignments.value
@@ -433,4 +498,3 @@ def run_server():
 threading.Thread(target=run_server, daemon=True).start()
 
 bot.run(TOKEN)
-
