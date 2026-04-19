@@ -188,11 +188,6 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("❌ This flight has already landed. Cannot join.", ephemeral=True)
             return
         
-        # TEMPORARY: Allow captain to join for testing
-        # if interaction.user.id == self.author_id:
-        #     await interaction.response.send_message("You are the flight captain! You can't join your own flight.", ephemeral=True)
-        #     return
-        
         user_id_str = f"<@{interaction.user.id}>"
         
         # Check if user already joined
