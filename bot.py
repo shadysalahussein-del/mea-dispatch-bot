@@ -172,7 +172,7 @@ class DisabledView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Assign Gates", style=discord.ButtonStyle.success, disabled=True))
 
 class DispatchView(discord.ui.View):
-    def __init__(self, flight_data, author_id, original_message=None):
+    def __init__(self, flight_data, author_id, original_message=None, author_display_name=None, author_avatar_url=None):
         super().__init__(timeout=None)
         self.flight_data = flight_data
         self.author_id = author_id
@@ -180,6 +180,8 @@ class DispatchView(discord.ui.View):
         self.pilots = [author_id]
         self.is_landed = False
         self.original_message = original_message
+        self.author_display_name = author_display_name
+        self.author_avatar_url = author_avatar_url
         
     @discord.ui.button(label="Join Flight", style=discord.ButtonStyle.primary)
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -212,13 +214,15 @@ class DispatchView(discord.ui.View):
         pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
         embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
         embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
-        embed.add_field(name="\u200b", value=f"**✈️ Aircraft:** {self.flight_data['aircraft']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.flight_data['flight_time']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.flight_data['dep_time']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**📊 Status:** {self.flight_data['status']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(pilot_mentions)}", inline=False)
-        embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
-        embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
+        embed.add_field(name="✈️ Aircraft", value=self.flight_data['aircraft'], inline=False)
+        embed.add_field(name="🕐 Flight Time", value=self.flight_data['flight_time'], inline=False)
+        embed.add_field(name="🛫 Departure", value=self.flight_data['dep_time'], inline=False)
+        embed.add_field(name="📊 Status", value=self.flight_data['status'], inline=False)
+        embed.add_field(name="👨‍✈️ Pilots", value=', '.join(pilot_mentions), inline=False)
+        embed.add_field(name="📝 Notes", value=self.flight_data.get('notes', 'No notes'), inline=False)
+        embed.set_footer(text=f"Dispatched by: {self.author_display_name}")
+        if self.author_avatar_url:
+            embed.set_thumbnail(url=self.author_avatar_url)
         
         await self.original_message.edit(embed=embed, view=self)
         await interaction.response.send_message(f"{interaction.user.mention} has joined the flight!", ephemeral=True)
@@ -229,7 +233,7 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("❌ This flight has already landed. Cannot update status.", ephemeral=True)
             return
         
-        view = StatusSelectView(self.flight_data, self.author_id, self.thread_id, self.pilots, self, self.original_message)
+        view = StatusSelectView(self.flight_data, self.author_id, self.thread_id, self.pilots, self, self.original_message, self.author_display_name, self.author_avatar_url)
         await interaction.response.send_message("Select flight status:", view=view, ephemeral=True)
     
     @discord.ui.button(label="Assign Gates", style=discord.ButtonStyle.success)
@@ -288,7 +292,7 @@ class GateAssignmentModal(discord.ui.Modal, title="Assign Gates"):
             await interaction.response.send_message(result_message, ephemeral=False)
 
 class ConfirmLandedView(discord.ui.View):
-    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view, original_message):
+    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view, original_message, author_display_name, author_avatar_url):
         super().__init__(timeout=60)
         self.flight_data = flight_data
         self.author_id = author_id
@@ -296,6 +300,8 @@ class ConfirmLandedView(discord.ui.View):
         self.pilots = pilots
         self.parent_view = parent_view
         self.original_message = original_message
+        self.author_display_name = author_display_name
+        self.author_avatar_url = author_avatar_url
     
     @discord.ui.button(label="Yes, Confirm Landed", style=discord.ButtonStyle.danger)
     async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -305,13 +311,15 @@ class ConfirmLandedView(discord.ui.View):
         pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
         embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
         embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
-        embed.add_field(name="\u200b", value=f"**✈️ Aircraft:** {self.flight_data['aircraft']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.flight_data['flight_time']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.flight_data['dep_time']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**📊 Status:** Landed", inline=False)
-        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(pilot_mentions)}", inline=False)
-        embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
-        embed.set_footer(text=f"Dispatched by: <@{self.author_id}> | Flight Completed")
+        embed.add_field(name="✈️ Aircraft", value=self.flight_data['aircraft'], inline=False)
+        embed.add_field(name="🕐 Flight Time", value=self.flight_data['flight_time'], inline=False)
+        embed.add_field(name="🛫 Departure", value=self.flight_data['dep_time'], inline=False)
+        embed.add_field(name="📊 Status", value="Landed", inline=False)
+        embed.add_field(name="👨‍✈️ Pilots", value=', '.join(pilot_mentions), inline=False)
+        embed.add_field(name="📝 Notes", value=self.flight_data.get('notes', 'No notes'), inline=False)
+        embed.set_footer(text=f"Dispatched by: {self.author_display_name} | Flight Completed")
+        if self.author_avatar_url:
+            embed.set_thumbnail(url=self.author_avatar_url)
         
         await self.original_message.edit(embed=embed, view=DisabledView())
         
@@ -329,7 +337,7 @@ class ConfirmLandedView(discord.ui.View):
         self.stop()
 
 class StatusSelectView(discord.ui.View):
-    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view, original_message):
+    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view, original_message, author_display_name, author_avatar_url):
         super().__init__(timeout=60)
         self.flight_data = flight_data
         self.author_id = author_id
@@ -337,6 +345,8 @@ class StatusSelectView(discord.ui.View):
         self.pilots = pilots
         self.parent_view = parent_view
         self.original_message = original_message
+        self.author_display_name = author_display_name
+        self.author_avatar_url = author_avatar_url
     
     @discord.ui.button(label="Pre-flight Check", style=discord.ButtonStyle.primary)
     async def preflight_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -364,7 +374,7 @@ class StatusSelectView(discord.ui.View):
     
     @discord.ui.button(label="Landed", style=discord.ButtonStyle.danger)
     async def landed_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view, self.original_message)
+        confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view, self.original_message, self.author_display_name, self.author_avatar_url)
         await interaction.response.send_message("⚠️ **Confirm Status Change**\nAre you sure you want to change the status to **Landed**?\n\nAfter confirming, all buttons will be disabled and the flight will be closed.", view=confirm_view, ephemeral=True)
     
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
@@ -378,16 +388,18 @@ class StatusSelectView(discord.ui.View):
         pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
         embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
         embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
-        embed.add_field(name="\u200b", value=f"**✈️ Aircraft:** {self.flight_data['aircraft']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.flight_data['flight_time']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.flight_data['dep_time']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**📊 Status:** {status}", inline=False)
-        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilots:** {', '.join(pilot_mentions)}", inline=False)
-        embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
-        embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
+        embed.add_field(name="✈️ Aircraft", value=self.flight_data['aircraft'], inline=False)
+        embed.add_field(name="🕐 Flight Time", value=self.flight_data['flight_time'], inline=False)
+        embed.add_field(name="🛫 Departure", value=self.flight_data['dep_time'], inline=False)
+        embed.add_field(name="📊 Status", value=status, inline=False)
+        embed.add_field(name="👨‍✈️ Pilots", value=', '.join(pilot_mentions), inline=False)
+        embed.add_field(name="📝 Notes", value=self.flight_data.get('notes', 'No notes'), inline=False)
+        embed.set_footer(text=f"Dispatched by: {self.author_display_name}")
+        if self.author_avatar_url:
+            embed.set_thumbnail(url=self.author_avatar_url)
         
         # Create a brand new view to replace the old one
-        new_view = DispatchView(self.flight_data, self.author_id, self.original_message)
+        new_view = DispatchView(self.flight_data, self.author_id, self.original_message, self.author_display_name, self.author_avatar_url)
         new_view.thread_id = self.thread_id
         new_view.pilots = self.pilots.copy()
         new_view.is_landed = self.parent_view.is_landed
@@ -510,20 +522,21 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
         
         embed = discord.Embed(title=f"✈️ {self.flight} | MEAV", color=discord.Color.red())
         embed.description = f"**{self.departure}** ({flight_data['dep_city']}) → **{self.arrival}** ({flight_data['arr_city']})"
-        embed.add_field(name="\u200b", value=f"**✈️ Aircraft:** {self.aircraft}", inline=False)
-        embed.add_field(name="\u200b", value=f"**🕐 Flight Time:** {self.route_data['flight_time']}", inline=False)
-        embed.add_field(name="\u200b", value=f"**🛫 Departure:** {self.dep_time.value}", inline=False)
-        embed.add_field(name="\u200b", value=f"**📊 Status:** {self.status}", inline=False)
-        embed.add_field(name="\u200b", value=f"**👨‍✈️ Pilot:** <@{interaction.user.id}>", inline=False)
-        embed.add_field(name="\u200b", value=f"**📝 Notes:** {flight_data['notes']}", inline=False)
+        embed.add_field(name="✈️ Aircraft", value=self.aircraft, inline=False)
+        embed.add_field(name="🕐 Flight Time", value=self.route_data['flight_time'], inline=False)
+        embed.add_field(name="🛫 Departure", value=self.dep_time.value, inline=False)
+        embed.add_field(name="📊 Status", value=self.status, inline=False)
+        embed.add_field(name="👨‍✈️ Pilot", value=f"<@{interaction.user.id}>", inline=False)
+        embed.add_field(name="📝 Notes", value=flight_data['notes'], inline=False)
         embed.set_footer(text=f"Dispatched by: {interaction.user.display_name}")
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
         
         # Send the message and store it
         await interaction.response.edit_message(content="✅ **Flight dispatched successfully!**", view=None, embed=None)
-        sent_message = await interaction.channel.send(embed=embed, view=DispatchView(flight_data, interaction.user.id))
+        sent_message = await interaction.channel.send(embed=embed, view=DispatchView(flight_data, interaction.user.id, None, interaction.user.display_name, interaction.user.display_avatar.url))
         
         # Update the view with the original message reference
-        view = DispatchView(flight_data, interaction.user.id, sent_message)
+        view = DispatchView(flight_data, interaction.user.id, sent_message, interaction.user.display_name, interaction.user.display_avatar.url)
         await sent_message.edit(embed=embed, view=view)
 
 # ==================== MAIN COMMAND ====================
