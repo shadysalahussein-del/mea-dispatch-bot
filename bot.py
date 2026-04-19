@@ -203,11 +203,13 @@ class DispatchView(discord.ui.View):
         # Add the pilot
         self.pilots.append(user_id_str)
         
-        # Create thread only once (when first person joins after captain)
-        if not self.thread_id and len(self.pilots) > 1:
+        # Check if this is the first person joining (after captain)
+        # Captain is already in pilots list (index 0)
+        if len(self.pilots) == 2 and not self.thread_id:
+            # Create private thread
             thread = await interaction.channel.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion", type=discord.ChannelType.private_thread)
             self.thread_id = thread.id
-            await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\nPilots: {', '.join(self.pilots)}")
+            await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\n\n{user_id_str} has joined the flight!")
             await interaction.response.send_message(f"{user_id_str} has joined the flight! A private thread has been created.", ephemeral=False)
         else:
             await interaction.response.send_message(f"{user_id_str} has joined the flight!", ephemeral=False)
