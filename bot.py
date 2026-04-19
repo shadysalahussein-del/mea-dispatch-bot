@@ -172,14 +172,14 @@ class DisabledView(discord.ui.View):
         self.add_item(discord.ui.Button(label="Assign Gates", style=discord.ButtonStyle.success, disabled=True))
 
 class DispatchView(discord.ui.View):
-    def __init__(self, flight_data, author_id, message_id=None):
+    def __init__(self, flight_data, author_id, original_message=None):
         super().__init__(timeout=None)
         self.flight_data = flight_data
         self.author_id = author_id
         self.thread_id = None
         self.pilots = [author_id]
         self.is_landed = False
-        self.message_id = message_id
+        self.original_message = original_message
         
     @discord.ui.button(label="Join Flight", style=discord.ButtonStyle.primary)
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -200,7 +200,7 @@ class DispatchView(discord.ui.View):
         self.pilots.append(user_id)
         
         if not self.thread_id:
-            thread = await interaction.message.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion")
+            thread = await self.original_message.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion")
             self.thread_id = thread.id
             await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\n\n{interaction.user.mention} has joined the flight!")
         else:
@@ -220,7 +220,7 @@ class DispatchView(discord.ui.View):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
         
-        await interaction.message.edit(embed=embed, view=self)
+        await self.original_message.edit(embed=embed, view=self)
         await interaction.response.send_message(f"{interaction.user.mention} has joined the flight!", ephemeral=True)
     
     @discord.ui.button(label="Update Status", style=discord.ButtonStyle.secondary)
@@ -229,7 +229,7 @@ class DispatchView(discord.ui.View):
             await interaction.response.send_message("❌ This flight has already landed. Cannot update status.", ephemeral=True)
             return
         
-        view = StatusSelectView(self.flight_data, self.author_id, self.thread_id, self.pilots, self)
+        view = StatusSelectView(self.flight_data, self.author_id, self.thread_id, self.pilots, self, self.original_message)
         await interaction.response.send_message("Select flight status:", view=view, ephemeral=True)
     
     @discord.ui.button(label="Assign Gates", style=discord.ButtonStyle.success)
@@ -288,13 +288,14 @@ class GateAssignmentModal(discord.ui.Modal, title="Assign Gates"):
             await interaction.response.send_message(result_message, ephemeral=False)
 
 class ConfirmLandedView(discord.ui.View):
-    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view):
+    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view, original_message):
         super().__init__(timeout=60)
         self.flight_data = flight_data
         self.author_id = author_id
         self.thread_id = thread_id
         self.pilots = pilots
         self.parent_view = parent_view
+        self.original_message = original_message
     
     @discord.ui.button(label="Yes, Confirm Landed", style=discord.ButtonStyle.danger)
     async def confirm_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -312,7 +313,7 @@ class ConfirmLandedView(discord.ui.View):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}> | Flight Completed")
         
-        await interaction.message.edit(embed=embed, view=DisabledView())
+        await self.original_message.edit(embed=embed, view=DisabledView())
         
         if self.thread_id:
             thread = interaction.guild.get_thread(self.thread_id)
@@ -328,13 +329,14 @@ class ConfirmLandedView(discord.ui.View):
         self.stop()
 
 class StatusSelectView(discord.ui.View):
-    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view):
+    def __init__(self, flight_data, author_id, thread_id, pilots, parent_view, original_message):
         super().__init__(timeout=60)
         self.flight_data = flight_data
         self.author_id = author_id
         self.thread_id = thread_id
         self.pilots = pilots
         self.parent_view = parent_view
+        self.original_message = original_message
     
     @discord.ui.button(label="Pre-flight Check", style=discord.ButtonStyle.primary)
     async def preflight_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -362,7 +364,7 @@ class StatusSelectView(discord.ui.View):
     
     @discord.ui.button(label="Landed", style=discord.ButtonStyle.danger)
     async def landed_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view)
+        confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view, self.original_message)
         await interaction.response.send_message("⚠️ **Confirm Status Change**\nAre you sure you want to change the status to **Landed**?\n\nAfter confirming, all buttons will be disabled and the flight will be closed.", view=confirm_view, ephemeral=True)
     
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
@@ -385,13 +387,12 @@ class StatusSelectView(discord.ui.View):
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
         
         # Create a brand new view to replace the old one
-        new_view = DispatchView(self.flight_data, self.author_id)
+        new_view = DispatchView(self.flight_data, self.author_id, self.original_message)
         new_view.thread_id = self.thread_id
         new_view.pilots = self.pilots.copy()
         new_view.is_landed = self.parent_view.is_landed
         
-        # Use the original message from the parent view
-        await interaction.message.edit(embed=embed, view=new_view)
+        await self.original_message.edit(embed=embed, view=new_view)
         
         if self.thread_id:
             thread = interaction.guild.get_thread(self.thread_id)
@@ -517,10 +518,13 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {flight_data['notes']}", inline=False)
         embed.set_footer(text=f"Dispatched by: {interaction.user.display_name}")
         
-        view = DispatchView(flight_data, interaction.user.id)
-        
+        # Send the message and store it
         await interaction.response.edit_message(content="✅ **Flight dispatched successfully!**", view=None, embed=None)
-        await interaction.channel.send(embed=embed, view=view)
+        sent_message = await interaction.channel.send(embed=embed, view=DispatchView(flight_data, interaction.user.id))
+        
+        # Update the view with the original message reference
+        view = DispatchView(flight_data, interaction.user.id, sent_message)
+        await sent_message.edit(embed=embed, view=view)
 
 # ==================== MAIN COMMAND ====================
 
