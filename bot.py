@@ -143,13 +143,12 @@ def get_airport_choices(current: str) -> list:
     for code, info in AIRPORT_INFO.items():
         if current_lower in code.lower() or current_lower in info['city'].lower():
             matches.append(app_commands.Choice(name=f"{code} - {info['city']}", value=code))
-    return matches[:25]  # Discord limits to 25 choices
+    return matches[:25]
 
 async def departure_autocomplete(interaction: discord.Interaction, current: str) -> list:
     return get_airport_choices(current)
 
 async def arrival_autocomplete(interaction: discord.Interaction, current: str) -> list:
-    # Get the departure from the command's namespace
     departure = interaction.namespace.departure
     if not departure:
         return []
@@ -157,7 +156,6 @@ async def arrival_autocomplete(interaction: discord.Interaction, current: str) -
     current_lower = current.lower()
     matches = []
     
-    # Only show destinations available from this departure
     if departure in DESTINATIONS:
         for code in DESTINATIONS[departure]:
             info = AIRPORT_INFO.get(code)
@@ -170,7 +168,6 @@ async def arrival_autocomplete(interaction: discord.Interaction, current: str) -
 # ==================== BUTTON VIEWS ====================
 
 class DisabledView(discord.ui.View):
-    """View with disabled buttons (used after flight is landed)"""
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(label="Join Flight", style=discord.ButtonStyle.primary, disabled=True))
@@ -191,9 +188,11 @@ class DispatchView(discord.ui.View):
         if self.is_landed:
             await interaction.response.send_message("❌ This flight has already landed. Cannot join.", ephemeral=True)
             return
-        if interaction.user.id == self.author_id:
-            await interaction.response.send_message("You are the flight captain! You can't join your own flight.", ephemeral=True)
-            return
+        
+        # TEMPORARY: Allow captain to join for testing (remove this comment and the line below to restore original)
+        # if interaction.user.id == self.author_id:
+        #     await interaction.response.send_message("You are the flight captain! You can't join your own flight.", ephemeral=True)
+        #     return
         
         user_id_str = f"<@{interaction.user.id}>"
         if user_id_str not in self.pilots:
@@ -329,7 +328,7 @@ class GateAssignmentModal(discord.ui.Modal, title="Assign Gates"):
         assignments_text = self.assignments.value
         await interaction.response.send_message(f"**🚪 Gate Assignments:**\n{assignments_text}", ephemeral=False)
 
-# ==================== FLOW CLASSES (for dispatch steps) ====================
+# ==================== FLOW CLASSES ====================
 
 class FlightSelectView(discord.ui.View):
     def __init__(self, flight_options, departure, arrival, route_data):
@@ -456,17 +455,14 @@ class FlightDetailsModal(discord.ui.Modal, title="Flight Details"):
 @app_commands.describe(departure="Departure airport (ICAO code or city name)", arrival="Arrival airport (ICAO code or city name)")
 @app_commands.autocomplete(departure=departure_autocomplete, arrival=arrival_autocomplete)
 async def dispatch_flight(interaction: discord.Interaction, departure: str, arrival: str):
-    # Validate departure
     if departure not in AIRPORT_INFO:
-        await interaction.response.send_message(f"❌ Departure airport '{departure}' not found. Please use a valid ICAO code or city name.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Departure airport '{departure}' not found.", ephemeral=True)
         return
     
-    # Validate arrival
     if arrival not in AIRPORT_INFO:
-        await interaction.response.send_message(f"❌ Arrival airport '{arrival}' not found. Please use a valid ICAO code or city name.", ephemeral=True)
+        await interaction.response.send_message(f"❌ Arrival airport '{arrival}' not found.", ephemeral=True)
         return
     
-    # Check if route exists
     route_key = f"{departure}_{arrival}"
     if route_key not in ROUTES:
         await interaction.response.send_message(f"❌ No direct flight found from {departure} to {arrival}.", ephemeral=True)
@@ -491,7 +487,6 @@ async def on_ready():
 
 TOKEN = os.getenv("TOKEN")
 
-# Simple web server to keep Render happy
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
