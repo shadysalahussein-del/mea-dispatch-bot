@@ -179,26 +179,23 @@ class DispatchView(discord.ui.View):
         self.thread_id = None
         self.pilots = [author_id]
         self.is_landed = False
-
+        
     @discord.ui.button(label="Join Flight", style=discord.ButtonStyle.primary)
     async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.is_landed:
             await interaction.response.send_message("❌ This flight has already landed. Cannot join.", ephemeral=True)
             return
         
-        # Dispatcher cannot join their own flight
         if interaction.user.id == self.author_id:
             await interaction.response.send_message("❌ You are the flight captain. You cannot join your own flight.", ephemeral=True)
             return
         
         user_id = interaction.user.id
         
-        # Check if already joined
         if user_id in self.pilots:
             await interaction.response.send_message("❌ You have already joined this flight.", ephemeral=True)
             return
         
-        # Add the pilot
         self.pilots.append(user_id)
         
         if not self.thread_id:
@@ -206,12 +203,11 @@ class DispatchView(discord.ui.View):
             self.thread_id = thread.id
             await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\n\n{interaction.user.mention} has joined the flight!")
         else:
-            await interaction.response.send_message(f"{interaction.user.mention} has joined the flight!", ephemeral=True)
             thread = interaction.guild.get_thread(self.thread_id)
             if thread:
                 await thread.send(f"✈️ {interaction.user.mention} has joined the flight!")
         
-        # Update the embed to show all pilots
+        # Update embed
         pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
         embed = discord.Embed(title=f"✈️ {self.flight_data['flight']} | MEAV", color=discord.Color.red())
         embed.description = f"**{self.flight_data['departure']}** ({self.flight_data['dep_city']}) → **{self.flight_data['arrival']}** ({self.flight_data['arr_city']})"
@@ -223,7 +219,8 @@ class DispatchView(discord.ui.View):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
         
-        await interaction.message.edit(embed=embed, view=self)        
+        await interaction.message.edit(embed=embed, view=self)
+        await interaction.response.send_message(f"{interaction.user.mention} has joined the flight!", ephemeral=True)
     
     @discord.ui.button(label="Update Status", style=discord.ButtonStyle.secondary)
     async def status_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -348,7 +345,6 @@ class StatusSelectView(discord.ui.View):
         discord.SelectOption(label="Landed", description="Landed at destination", emoji="🛬"),
         discord.SelectOption(label="Cancelled", description="Flight cancelled", emoji="❌"),
     ])
-
     async def status_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
         status = select.values[0]
         
@@ -370,10 +366,10 @@ class StatusSelectView(discord.ui.View):
         embed.add_field(name="\u200b", value=f"**📝 Notes:** {self.flight_data.get('notes', 'No notes')}", inline=False)
         embed.set_footer(text=f"Dispatched by: <@{self.author_id}>")
         
-        # Create a new view to refresh the buttons
+        # Create a brand new view to replace the old one
         new_view = DispatchView(self.flight_data, self.author_id)
         new_view.thread_id = self.thread_id
-        new_view.pilots = self.pilots
+        new_view.pilots = self.pilots.copy()
         new_view.is_landed = self.parent_view.is_landed
         
         await interaction.message.edit(embed=embed, view=new_view)
@@ -384,6 +380,7 @@ class StatusSelectView(discord.ui.View):
                 await thread.send(f"**📢 Status Update**\n✈️ Flight {self.flight_data['flight']} status changed to: **{status}**\nUpdated by: {interaction.user.mention}")
         
         await interaction.response.send_message(f"✅ Flight status updated to: {status}", ephemeral=True)
+        self.stop()
 
 # ==================== FLOW CLASSES ====================
 
