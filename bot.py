@@ -335,24 +335,41 @@ class StatusSelectView(discord.ui.View):
         self.pilots = pilots
         self.parent_view = parent_view
     
-    @discord.ui.select(placeholder="Choose flight status...", options=[
-        discord.SelectOption(label="Pre-flight Check", description="Before departure", emoji="✅"),
-        discord.SelectOption(label="Taxi", description="Taxi to runway", emoji="🛫"),
-        discord.SelectOption(label="Takeoff", description="Taking off", emoji="✈️"),
-        discord.SelectOption(label="Climb", description="Climbing to altitude", emoji="⬆️"),
-        discord.SelectOption(label="Cruise", description="Cruising at altitude", emoji="🌊"),
-        discord.SelectOption(label="Descent", description="Descending for landing", emoji="⬇️"),
-        discord.SelectOption(label="Landed", description="Landed at destination", emoji="🛬"),
-        discord.SelectOption(label="Cancelled", description="Flight cancelled", emoji="❌"),
-    ])
-    async def status_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
-        status = select.values[0]
-        
-        if status == "Landed":
-            confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view)
-            await interaction.response.send_message("⚠️ **Confirm Status Change**\nAre you sure you want to change the status to **Landed**?\n\nAfter confirming, all buttons will be disabled and the flight will be closed.", view=confirm_view, ephemeral=True)
-            return
-        
+    @discord.ui.button(label="Pre-flight Check", style=discord.ButtonStyle.primary)
+    async def preflight_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.update_status(interaction, "Pre-flight Check")
+    
+    @discord.ui.button(label="Taxi", style=discord.ButtonStyle.primary)
+    async def taxi_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.update_status(interaction, "Taxi")
+    
+    @discord.ui.button(label="Takeoff", style=discord.ButtonStyle.primary)
+    async def takeoff_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.update_status(interaction, "Takeoff")
+    
+    @discord.ui.button(label="Climb", style=discord.ButtonStyle.primary)
+    async def climb_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.update_status(interaction, "Climb")
+    
+    @discord.ui.button(label="Cruise", style=discord.ButtonStyle.primary)
+    async def cruise_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.update_status(interaction, "Cruise")
+    
+    @discord.ui.button(label="Descent", style=discord.ButtonStyle.primary)
+    async def descent_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.update_status(interaction, "Descent")
+    
+    @discord.ui.button(label="Landed", style=discord.ButtonStyle.danger)
+    async def landed_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        confirm_view = ConfirmLandedView(self.flight_data, self.author_id, self.thread_id, self.pilots, self.parent_view)
+        await interaction.response.send_message("⚠️ **Confirm Status Change**\nAre you sure you want to change the status to **Landed**?\n\nAfter confirming, all buttons will be disabled and the flight will be closed.", view=confirm_view, ephemeral=True)
+    
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Status update cancelled.", ephemeral=True)
+        self.stop()
+    
+    async def update_status(self, interaction: discord.Interaction, status: str):
         self.flight_data['status'] = status
         
         pilot_mentions = [f"<@{pid}>" for pid in self.pilots]
