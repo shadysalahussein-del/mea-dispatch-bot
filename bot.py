@@ -196,7 +196,6 @@ class DispatchView(discord.ui.View):
             thread = await interaction.message.create_thread(name=f"✈️ Flight {self.flight_data['flight']} Discussion")
             self.thread_id = thread.id
             await thread.send(f"**✈️ Flight {self.flight_data['flight']} Discussion**\nCaptain: <@{self.author_id}>\n\n{interaction.user.mention} has joined the flight!")
-            await interaction.response.send_message(f"{interaction.user.mention} has joined the flight! A private thread has been created.", ephemeral=False)
         else:
             await interaction.response.send_message(f"{interaction.user.mention} has joined the flight!", ephemeral=False)
             thread = interaction.guild.get_thread(self.thread_id)
@@ -251,7 +250,7 @@ class GateAssignmentModal(discord.ui.Modal, title="Assign Gates"):
         assignments_text = self.assignments.value
         thread = self.guild.get_thread(self.thread_id) if self.thread_id else None
         
-        result_message = "**🚪 Gate Assignments:**\n"
+        result_message = "**Gate Assignments:** \n"
         
         parts = [p.strip() for p in assignments_text.split(',')]
         
