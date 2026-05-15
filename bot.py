@@ -630,7 +630,7 @@ async def dispatch_flight(interaction: discord.Interaction, departure: str, arri
 
 @bot.tree.command(name="live", description="Show active Cedar Jet ME flights")
 async def live(interaction: discord.Interaction):
-    await interaction.response.send_message("🔄 Fetching live flights...")
+    await interaction.response.defer(thinking=True)
     
     try:
         async with aiohttp.ClientSession() as session:
@@ -647,7 +647,7 @@ async def live(interaction: discord.Interaction):
                         break
             
             if not expert_id:
-                await interaction.edit_original_response(content="❌ Could not find Expert Server")
+                await interaction.followup.send("❌ Could not find Expert Server")
                 return
             
             # Get flights
@@ -655,40 +655,50 @@ async def live(interaction: discord.Interaction):
                 data = await resp.json()
                 flights = data.get("result", [])
             
-            # Filter for ME callsigns
+            # Filter for ME callsigns (ends with ME)
             me_flights = [f for f in flights if f.get("callsign", "").endswith("ME")]
             
             if not me_flights:
-                await interaction.edit_original_response(content="✈️ No Cedar Jet ME flights active right now")
+                await interaction.followup.send("✈️ No Cedar Jet ME flights active right now")
                 return
             
-            # Build response
-            result = "**✈️ Live Cedar Jet Flights on Expert Server**\n\n"
-            for f in me_flights:
-                callsign = f.get("callsign", "?")
-                username = f.get("username", "?")
-                aircraft_id = f.get("aircraftId", "")
-                aircraft_name = aircraft_cache.get(aircraft_id, "Aircraft")
+            # Build embed
+            embed = discord.Embed(
+                title="✈️ Live Cedar Jet Flights on Expert Server",
+                color=discord.Color.red()
+            )
+            
+            for flight in me_flights:
+                callsign = flight.get("callsign", "Unknown")
+                username = flight.get("username", "Unknown Pilot")
+                aircraft_id = flight.get("aircraftId", "")
                 
-                # Get route from your database
-                route_text = "Route unknown"
-                for r_key, r_data in ROUTES.items():
-                    if r_data.get("flight") == callsign:
-                        dep = r_key.split("_")[0]
-                        arr = r_key.split("_")[1]
+                # Get aircraft name from cache
+                aircraft_name = aircraft_cache.get(aircraft_id, "Unknown Aircraft")
+                
+                # Find route from your database using callsign
+                route_text = "Route not available"
+                for route_key, route_data in ROUTES.items():
+                    if route_data.get("flight") == callsign:
+                        dep = route_key.split("_")[0]
+                        arr = route_key.split("_")[1]
                         dep_city = AIRPORT_INFO.get(dep, {}).get("city", dep)
                         arr_city = AIRPORT_INFO.get(arr, {}).get("city", arr)
                         route_text = f"{dep} → {arr} ({dep_city} → {arr_city})"
                         break
                 
-                result += f"✈️ **Cedar Jet {callsign}** - {username}\n"
-                result += f"📍 {route_text}\n"
-                result += f"✈️ {aircraft_name}\n\n"
+                # Add field for each flight (no duplicate "Cedar Jet")
+                embed.add_field(
+                    name=f"✈️ **{callsign}** - {username}",
+                    value=f"📍 {route_text}\n✈️ {aircraft_name}",
+                    inline=False
+                )
             
-            await interaction.edit_original_response(content=result)
+            embed.set_footer(text=f"Last updated: {discord.utils.utcnow().strftime('%I:%M %p UTC')}")
+            await interaction.followup.send(embed=embed)
             
     except Exception as e:
-        await interaction.edit_original_response(content=f"❌ Error: {str(e)}")
+        await interaction.followup.send(f"❌ Error: {str(e)}")
 
 # ==================== RUN THE BOT ====================
 
