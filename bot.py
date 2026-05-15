@@ -15,7 +15,7 @@ IF_API_BASE = "https://api.infiniteflight.com/public/v2"
 aircraft_cache = {}
 # Manual aircraft mapping for MEAV
 MANUAL_AIRCRAFT = {
-    "d7434d84-555a-4d9b-93a7-53c77cf846ea": "A320-200",
+    "d7434d84-555a-4d9b-93a7-53c77cf846ea": "A321-200",
     # Add more UUIDs as you discover them
 }
 async def fetch_aircraft_cache():
@@ -679,7 +679,7 @@ async def live(interaction: discord.Interaction):
                 aircraft_id = flight.get("aircraftId", "")
                 
                 # Get aircraft name from cache
-aircraft_name = MANUAL_AIRCRAFT.get(aircraft_id, aircraft_cache.get(aircraft_id, "Unknown Aircraft"))                
+                aircraft_name = MANUAL_AIRCRAFT.get(aircraft_id, aircraft_cache.get(aircraft_id, "Unknown Aircraft"))                
                 # Get flight plan for departure/arrival
                 flight_plan = await get_flight_plan(expert_id, flight_id)
                 waypoints = flight_plan.get("waypoints", [])
