@@ -679,8 +679,9 @@ async def live(interaction: discord.Interaction):
                 
                 # Get flight plan for departure/arrival
                 flight_plan = await get_flight_plan(expert_id, flight_id)
-                dep_icao = flight_plan.get("departureAirportCode", "???")
-                arr_icao = flight_plan.get("destinationAirportCode", "???")
+                waypoints = flight_plan.get("waypoints", [])
+                dep_icao = waypoints[0] if len(waypoints) > 0 else "???"
+                arr_icao = waypoints[-1] if len(waypoints) > 1 else "???"
                 
                 # Get airport names from AIRPORT_INFO
                 dep_name = AIRPORT_INFO.get(dep_icao, {}).get("city", dep_icao) if dep_icao != "???" else "Unknown"
