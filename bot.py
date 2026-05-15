@@ -655,7 +655,7 @@ async def live(interaction: discord.Interaction):
                 data = await resp.json()
                 flights = data.get("result", [])
             
-            # Filter for ME callsigns (ends with ME)
+            # Filter for ME callsigns
             me_flights = [f for f in flights if f.get("callsign", "").endswith("ME")]
             
             if not me_flights:
@@ -671,23 +671,23 @@ async def live(interaction: discord.Interaction):
             for flight in me_flights:
                 callsign = flight.get("callsign", "Unknown")
                 username = flight.get("username", "Unknown Pilot")
+                flight_id = flight.get("flightId", "")
                 aircraft_id = flight.get("aircraftId", "")
                 
                 # Get aircraft name from cache
                 aircraft_name = aircraft_cache.get(aircraft_id, "Unknown Aircraft")
                 
-                # Find route from your database using callsign
-                route_text = "Route not available"
-                for route_key, route_data in ROUTES.items():
-                    if route_data.get("flight") == callsign:
-                        dep = route_key.split("_")[0]
-                        arr = route_key.split("_")[1]
-                        dep_city = AIRPORT_INFO.get(dep, {}).get("city", dep)
-                        arr_city = AIRPORT_INFO.get(arr, {}).get("city", arr)
-                        route_text = f"{dep} → {arr} ({dep_city} → {arr_city})"
-                        break
+                # Get flight plan for departure/arrival
+                flight_plan = await get_flight_plan(expert_id, flight_id)
+                dep_icao = flight_plan.get("departureAirportCode", "???")
+                arr_icao = flight_plan.get("destinationAirportCode", "???")
                 
-                # Add field for each flight (no duplicate "Cedar Jet")
+                # Get airport names from AIRPORT_INFO
+                dep_name = AIRPORT_INFO.get(dep_icao, {}).get("city", dep_icao) if dep_icao != "???" else "Unknown"
+                arr_name = AIRPORT_INFO.get(arr_icao, {}).get("city", arr_icao) if arr_icao != "???" else "Unknown"
+                
+                route_text = f"{dep_icao} → {arr_icao} ({dep_name} → {arr_name})"
+                
                 embed.add_field(
                     name=f"✈️ **{callsign}** - {username}",
                     value=f"📍 {route_text}\n✈️ {aircraft_name}",
@@ -727,5 +727,20 @@ def run_server():
     server.serve_forever()
 
 threading.Thread(target=run_server, daemon=True).start()
+
+async def get_flight_plan(session_id, flight_id):
+    """Get the flight plan for a specific flight"""
+    url = f"{IF_API_BASE}/sessions/{session_id}/flights/{flight_id}/flightplan"
+    headers = {"Authorization": f"Bearer {IF_API_KEY}"}
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("result", {})
+    except Exception as e:
+        print(f"Error fetching flight plan: {e}")
+    return None
 
 bot.run(TOKEN)
