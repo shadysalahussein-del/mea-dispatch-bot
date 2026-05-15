@@ -707,10 +707,12 @@ async def on_ready():
     print(f'✅ Bot is online! Logged in as {bot.user}')
     try:
         synced = await bot.tree.sync()
-    await fetch_aircraft_cache()
         print(f"✅ Synced {len(synced)} command(s)")
     except Exception as e:
         print(f"Error syncing commands: {e}")
+    
+    await fetch_aircraft_cache()
+    print("✅ Aircraft cache loaded")
 
 TOKEN = os.getenv("TOKEN")
 
