@@ -27,8 +27,10 @@ async def fetch_aircraft_cache():
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as response:
+                print(f"Liveries response status: {response.status}")
                 if response.status == 200:
                     data = await response.json()
+                    print(f"Liveries data keys: {data.keys() if data else 'None'}")
                     if "result" in data:
                         for item in data["result"]:
                             aircraft_id = item.get("aircraftID")
@@ -38,29 +40,13 @@ async def fetch_aircraft_cache():
                         print(f"✅ Loaded {len(aircraft_cache)} aircraft into cache")
                     else:
                         print("⚠️ No 'result' field in liveries response")
+                        print(f"Response sample: {str(data)[:500]}")
                 else:
                     print(f"❌ Failed to fetch liveries: {response.status}")
+                    text = await response.text()
+                    print(f"Response: {text[:500]}")
     except Exception as e:
         print(f"❌ Error fetching aircraft cache: {e}")
-async def get_expert_session_id():
-    """Get the session ID for the Expert Server"""
-    url = f"{IF_API_BASE}/sessions"
-    headers = {"Authorization": f"Bearer {IF_API_KEY}"}
-    
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    # The API returns {"errorCode":0, "result": [...]}
-                    sessions = data.get("result", [])
-                    for session_data in sessions:
-                        if session_data.get("worldType") == 3:
-                            session_id = session_data.get("id")
-                            return session_id
-    except Exception as e:
-        print(f"Error fetching Expert Server session: {e}")
-    return None
 
 async def get_live_flights(session_id):
     """Get all active flights on a server"""
