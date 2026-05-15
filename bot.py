@@ -5,6 +5,7 @@ import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 import asyncio
+import aiohttp
 
 # Infinite Flight Live API Configuration
 IF_API_KEY = "py711e1ri3456ayrs9zhtuanjzqhemh6"
