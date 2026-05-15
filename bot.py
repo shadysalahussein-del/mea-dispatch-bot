@@ -4,6 +4,82 @@ from discord.ext import commands
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
+import asyncio
+
+# Infinite Flight Live API Configuration
+IF_API_KEY = "py711e1ri3456ayrs9zhtuanjzqhemh6"
+IF_API_BASE = "https://api.infiniteflight.com/public/v1"
+
+# Aircraft ID cache (populated at startup)
+aircraft_cache = {}
+
+async def fetch_aircraft_cache():
+    """Fetch aircraft UUID to name mapping from Infinite Flight API"""
+    global aircraft_cache
+    url = f"{IF_API_BASE}/liveries"
+    headers = {"Authorization": f"Bearer {IF_API_KEY}"}
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "result" in data:
+                        for item in data["result"]:
+                            aircraft_id = item.get("aircraftID")
+                            aircraft_name = item.get("aircraftName")
+                            if aircraft_id and aircraft_name:
+                                aircraft_cache[aircraft_id] = aircraft_name
+                        print(f"✅ Loaded {len(aircraft_cache)} aircraft into cache")
+                    else:
+                        print("⚠️ No 'result' field in liveries response")
+                else:
+                    print(f"❌ Failed to fetch liveries: {response.status}")
+    except Exception as e:
+        print(f"❌ Error fetching aircraft cache: {e}")
+async def get_expert_session_id():
+    """Get the session ID for the Expert Server"""
+    url = f"{IF_API_BASE}/sessions"
+    headers = {"Authorization": f"Bearer {IF_API_KEY}"}
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "result" in data:
+                        for session_data in data["result"]:
+                            if session_data.get("worldType") == 3:  # Expert Server
+                                session_id = session_data.get("id")
+                                print(f"✅ Found Expert Server session: {session_id}")
+                                return session_id
+                        print("⚠️ Expert Server not found")
+                    else:
+                        print("⚠️ No 'result' field in sessions response")
+                else:
+                    print(f"❌ Failed to fetch sessions: {response.status}")
+    except Exception as e:
+        print(f"❌ Error fetching Expert Server session: {e}")
+    return None
+async def get_live_flights(session_id):
+    """Get all active flights on a server"""
+    url = f"{IF_API_BASE}/sessions/{session_id}/flights"
+    headers = {"Authorization": f"Bearer {IF_API_KEY}"}
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "result" in data:
+                        return data["result"]
+                    else:
+                        print("⚠️ No 'result' field in flights response")
+                else:
+                    print(f"❌ Failed to fetch flights: {response.status}")
+    except Exception as e:
+        print(f"❌ Error fetching flights: {e}")
+    return []
 
 # Bot setup
 intents = discord.Intents.default()
@@ -556,6 +632,74 @@ async def dispatch_flight(interaction: discord.Interaction, departure: str, arri
     
     flight_view = FlightSelectView(flight_options, departure, arrival, route_data)
     await interaction.response.send_message(f"✈️ **Flight from {departure} to {arrival}**\n\nSelect your flight number:", view=flight_view, ephemeral=True)
+# ==================== LIVE FLIGHTS COMMAND ====================
+
+@bot.tree.command(name="live", description="Show all active Cedar Jet ME flights on Expert Server")
+async def live_flights(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=False)
+    
+    # Get Expert Server session ID
+    session_id = await get_expert_session_id()
+    if not session_id:
+        await interaction.followup.send("❌ Could not find Expert Server. Please try again later.")
+        return
+    
+    # Get live flights
+    flights = await get_live_flights(session_id)
+    if not flights:
+        await interaction.followup.send("❌ No flights found on Expert Server.")
+        return
+    
+    # Filter for ME callsigns
+    me_flights = []
+    for flight in flights:
+        callsign = flight.get("callsign", "")
+        if callsign.endswith("ME"):
+            me_flights.append(flight)
+    
+    if not me_flights:
+        await interaction.followup.send("✈️ No Cedar Jet ME flights are currently active on Expert Server.")
+        return
+    
+    # Build the response embed
+    embed = discord.Embed(
+        title="✈️ Live Cedar Jet Flights on Expert Server",
+        color=discord.Color.red()
+    )
+    
+    for flight in me_flights:
+        callsign = flight.get("callsign", "Unknown")
+        username = flight.get("username", "Unknown Pilot")
+        aircraft_id = flight.get("aircraftId", "")
+        
+        # Get aircraft name from cache
+        aircraft_name = aircraft_cache.get(aircraft_id, "Unknown Aircraft")
+        
+        # Get route from your database using callsign
+        # You have ROUTES dictionary with keys like "OLBA_HECA"
+        # We need to match flight number from callsign
+        # For now, show placeholder
+        route_text = "Route information not available"
+        
+        # Try to find the flight in your routes
+        for route_key, route_data in ROUTES.items():
+            if route_data.get("flight") == callsign:
+                dep = route_key.split("_")[0]
+                arr = route_key.split("_")[1]
+                dep_city = AIRPORT_INFO.get(dep, {}).get("city", dep)
+                arr_city = AIRPORT_INFO.get(arr, {}).get("city", arr)
+                route_text = f"{dep} → {arr} ({dep_city} → {arr_city})"
+                break
+        
+        embed.add_field(
+            name=f"✈️ **Cedar Jet {callsign}** - {username}",
+            value=f"📍 {route_text}\n✈️ {aircraft_name}",
+            inline=False
+        )
+    
+    embed.set_footer(text=f"Last updated: {discord.utils.utcnow().strftime('%I:%M %p UTC')}")
+    
+    await interaction.followup.send(embed=embed)
 
 # ==================== RUN THE BOT ====================
 
