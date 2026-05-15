@@ -623,75 +623,76 @@ async def dispatch_flight(interaction: discord.Interaction, departure: str, arri
     flight_options = [discord.SelectOption(label=route_data['flight'], value=route_data['flight'])]
     
     flight_view = FlightSelectView(flight_options, departure, arrival, route_data)
-    await interaction.response.send_message(f"✈️ **Flight from {departure} to {arrival}**\n\nSelect your flight number:", view=flight_view, ephemeral=True)
+    await interaction.response.send_message(f"✈️ **Flight from {departure} to {arrival}**\n\nSelect your flight number:", view=flight_view, ephemeral=True
+)
 # ==================== LIVE FLIGHTS COMMAND ====================
 
 @bot.tree.command(name="live", description="Show all active Cedar Jet ME flights on Expert Server")
 async def live_flights(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=False)
+    # Defer immediately to prevent timeout
+    await interaction.response.defer(thinking=True)
     
-    # Get Expert Server session ID
-    session_id = await get_expert_session_id()
-    if not session_id:
-        await interaction.followup.send("❌ Could not find Expert Server. Please try again later.")
-        return
-    
-    # Get live flights
-    flights = await get_live_flights(session_id)
-    if not flights:
-        await interaction.followup.send("❌ No flights found on Expert Server.")
-        return
-    
-    # Filter for ME callsigns
-    me_flights = []
-    for flight in flights:
-        callsign = flight.get("callsign", "")
-        if callsign.endswith("ME"):
-            me_flights.append(flight)
-    
-    if not me_flights:
-        await interaction.followup.send("✈️ No Cedar Jet ME flights are currently active on Expert Server.")
-        return
-    
-    # Build the response embed
-    embed = discord.Embed(
-        title="✈️ Live Cedar Jet Flights on Expert Server",
-        color=discord.Color.red()
-    )
-    
-    for flight in me_flights:
-        callsign = flight.get("callsign", "Unknown")
-        username = flight.get("username", "Unknown Pilot")
-        aircraft_id = flight.get("aircraftId", "")
+    try:
+        # Get Expert Server session ID
+        session_id = await get_expert_session_id()
+        if not session_id:
+            await interaction.followup.send("❌ Could not find Expert Server. Please try again later.")
+            return
         
-        # Get aircraft name from cache
-        aircraft_name = aircraft_cache.get(aircraft_id, "Unknown Aircraft")
+        # Get live flights
+        flights = await get_live_flights(session_id)
+        if not flights:
+            await interaction.followup.send("❌ No flights found on Expert Server.")
+            return
         
-        # Get route from your database using callsign
-        # You have ROUTES dictionary with keys like "OLBA_HECA"
-        # We need to match flight number from callsign
-        # For now, show placeholder
-        route_text = "Route information not available"
+        # Filter for ME callsigns
+        me_flights = []
+        for flight in flights:
+            callsign = flight.get("callsign", "")
+            if callsign and callsign.endswith("ME"):
+                me_flights.append(flight)
         
-        # Try to find the flight in your routes
-        for route_key, route_data in ROUTES.items():
-            if route_data.get("flight") == callsign:
-                dep = route_key.split("_")[0]
-                arr = route_key.split("_")[1]
-                dep_city = AIRPORT_INFO.get(dep, {}).get("city", dep)
-                arr_city = AIRPORT_INFO.get(arr, {}).get("city", arr)
-                route_text = f"{dep} → {arr} ({dep_city} → {arr_city})"
-                break
+        if not me_flights:
+            await interaction.followup.send("✈️ No Cedar Jet ME flights are currently active on Expert Server.")
+            return
         
-        embed.add_field(
-            name=f"✈️ **Cedar Jet {callsign}** - {username}",
-            value=f"📍 {route_text}\n✈️ {aircraft_name}",
-            inline=False
+        # Build the response embed
+        embed = discord.Embed(
+            title="✈️ Live Cedar Jet Flights on Expert Server",
+            color=discord.Color.red()
         )
-    
-    embed.set_footer(text=f"Last updated: {discord.utils.utcnow().strftime('%I:%M %p UTC')}")
-    
-    await interaction.followup.send(embed=embed)
+        
+        for flight in me_flights:
+            callsign = flight.get("callsign", "Unknown")
+            username = flight.get("username", "Unknown Pilot")
+            aircraft_id = flight.get("aircraftId", "")
+            
+            # Get aircraft name from cache
+            aircraft_name = aircraft_cache.get(aircraft_id, "Unknown Aircraft")
+            
+            # Try to find the flight in your routes
+            route_text = "Route information not available"
+            for route_key, route_data in ROUTES.items():
+                if route_data.get("flight") == callsign:
+                    dep = route_key.split("_")[0]
+                    arr = route_key.split("_")[1]
+                    dep_city = AIRPORT_INFO.get(dep, {}).get("city", dep)
+                    arr_city = AIRPORT_INFO.get(arr, {}).get("city", arr)
+                    route_text = f"{dep} → {arr} ({dep_city} → {arr_city})"
+                    break
+            
+            embed.add_field(
+                name=f"✈️ **Cedar Jet {callsign}** - {username}",
+                value=f"📍 {route_text}\n✈️ {aircraft_name}",
+                inline=False
+            )
+        
+        embed.set_footer(text=f"Last updated: {discord.utils.utcnow().strftime('%I:%M %p UTC')}")
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        print(f"Error in /live command: {e}")
+        await interaction.followup.send("❌ An error occurred while fetching live flights. Please try again later.")
 
 # ==================== RUN THE BOT ====================
 
