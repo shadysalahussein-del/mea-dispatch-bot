@@ -47,20 +47,16 @@ async def get_expert_session_id():
             async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if "result" in data:
-                        for session_data in data["result"]:
-                            if session_data.get("worldType") == 3:  # Expert Server
-                                session_id = session_data.get("id")
-                                print(f"✅ Found Expert Server session: {session_id}")
-                                return session_id
-                        print("⚠️ Expert Server not found")
-                    else:
-                        print("⚠️ No 'result' field in sessions response")
-                else:
-                    print(f"❌ Failed to fetch sessions: {response.status}")
+                    # The API returns {"errorCode":0, "result": [...]}
+                    sessions = data.get("result", [])
+                    for session_data in sessions:
+                        if session_data.get("worldType") == 3:
+                            session_id = session_data.get("id")
+                            return session_id
     except Exception as e:
-        print(f"❌ Error fetching Expert Server session: {e}")
+        print(f"Error fetching Expert Server session: {e}")
     return None
+
 async def get_live_flights(session_id):
     """Get all active flights on a server"""
     url = f"{IF_API_BASE}/sessions/{session_id}/flights"
@@ -71,14 +67,10 @@ async def get_live_flights(session_id):
             async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if "result" in data:
-                        return data["result"]
-                    else:
-                        print("⚠️ No 'result' field in flights response")
-                else:
-                    print(f"❌ Failed to fetch flights: {response.status}")
+                    # The API returns {"errorCode":0, "result": [...]}
+                    return data.get("result", [])
     except Exception as e:
-        print(f"❌ Error fetching flights: {e}")
+        print(f"Error fetching flights: {e}")
     return []
 
 # Bot setup
