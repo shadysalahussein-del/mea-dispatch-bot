@@ -8,7 +8,7 @@ import asyncio
 
 # Infinite Flight Live API Configuration
 IF_API_KEY = "py711e1ri3456ayrs9zhtuanjzqhemh6"
-IF_API_BASE = "https://api.infiniteflight.com/public/v1"
+IF_API_BASE = "https://api.infiniteflight.com/public/v2"
 
 # Aircraft ID cache (populated at startup)
 aircraft_cache = {}
