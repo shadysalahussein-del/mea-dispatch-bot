@@ -13,40 +13,42 @@ IF_API_BASE = "https://api.infiniteflight.com/public/v2"
 
 # Aircraft ID cache (populated at startup)
 aircraft_cache = {}
+livery_cache = {}
 # Manual aircraft mapping for MEAV
 MANUAL_AIRCRAFT = {
     "d7434d84-555a-4d9b-93a7-53c77cf846ea": "A321-200",
     # Add more UUIDs as you discover them
 }
 async def fetch_aircraft_cache():
-    """Fetch aircraft UUID to name mapping from Infinite Flight API"""
-    global aircraft_cache
-    url = f"{IF_API_BASE}/liveries"
+    """Fetch aircraft UUID to name mapping and livery UUID to name mapping from Infinite Flight API"""
+    global aircraft_cache, livery_cache
+    url = f"{IF_API_BASE}/aircraft/liveries"
     headers = {"Authorization": f"Bearer {IF_API_KEY}"}
     
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as response:
-                print(f"Liveries response status: {response.status}")
                 if response.status == 200:
                     data = await response.json()
-                    print(f"Liveries data keys: {data.keys() if data else 'None'}")
                     if "result" in data:
                         for item in data["result"]:
                             aircraft_id = item.get("aircraftID")
                             aircraft_name = item.get("aircraftName")
+                            livery_id = item.get("id")
+                            livery_name = item.get("liveryName")
+                            
                             if aircraft_id and aircraft_name:
                                 aircraft_cache[aircraft_id] = aircraft_name
-                        print(f"✅ Loaded {len(aircraft_cache)} aircraft into cache")
+                            if livery_id and livery_name:
+                                livery_cache[livery_id] = livery_name
+                                
+                        print(f"✅ Loaded {len(aircraft_cache)} aircraft and {len(livery_cache)} liveries into cache")
                     else:
                         print("⚠️ No 'result' field in liveries response")
-                        print(f"Response sample: {str(data)[:500]}")
                 else:
                     print(f"❌ Failed to fetch liveries: {response.status}")
-                    text = await response.text()
-                    print(f"Response: {text[:500]}")
     except Exception as e:
-        print(f"❌ Error fetching aircraft cache: {e}")
+        print(f"❌ Error fetching cache: {e}")
 
 async def get_live_flights(session_id):
     """Get all active flights on a server"""
@@ -618,7 +620,7 @@ async def dispatch_flight(interaction: discord.Interaction, departure: str, arri
 )
 # ==================== LIVE FLIGHTS COMMAND ====================
 
-@bot.tree.command(name="live", description="Show active Cedar Jet ME flights")
+@bot.tree.command(name="live", description="Show active MEAV flights")
 async def live(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
     
@@ -665,7 +667,9 @@ async def live(interaction: discord.Interaction):
                 aircraft_id = flight.get("aircraftId", "")
                 
                 # Get aircraft name from cache
-                aircraft_name = MANUAL_AIRCRAFT.get(aircraft_id, aircraft_cache.get(aircraft_id, "Unknown Aircraft"))                
+                aircraft_name = MANUAL_AIRCRAFT.get(aircraft_id, aircraft_cache.get(aircraft_id, "Unknown Aircraft"))
+                livery_id = flight.get("liveryId", "")
+                livery_name = livery_cache.get(livery_id, "")                
                 # Get flight plan for departure/arrival
                 flight_plan = await get_flight_plan(expert_id, flight_id)
                 waypoints = flight_plan.get("waypoints", [])
@@ -679,8 +683,9 @@ async def live(interaction: discord.Interaction):
                 route_text = f"{dep_icao} → {arr_icao} ({dep_name} → {arr_name})"
                 
                 embed.add_field(
-                    name=f"✈️ **{callsign}** - {username}",
-                    value=f"📍 {route_text}\n✈️ {aircraft_name}",
+                    name=f"✈️ **{callsign}** - {username}"
+                    livery_text = f" ({livery_name})" if livery_name else ""
+                    value=f"📍 {route_text}\n✈️ {aircraft_name}{livery_text}",,
                     inline=False
                 )
             
