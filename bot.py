@@ -656,7 +656,7 @@ async def live(interaction: discord.Interaction):
             
             # Build embed
             embed = discord.Embed(
-                title="✈️ Live Cedar Jet Flights on Expert Server",
+                title="✈️ LiveMEAV Flights",
                 color=discord.Color.red()
             )
             
@@ -685,7 +685,7 @@ async def live(interaction: discord.Interaction):
 
                 embed.add_field(
                     name=f"✈️ **{callsign}** - {username}",
-                    value=f"📍 {route_text}\n✈️ {aircraft_name}{livery_text}",
+                    value=f"{route_text}\n️{aircraft_name}{livery_text}",
                     inline=False
                 )                
             
