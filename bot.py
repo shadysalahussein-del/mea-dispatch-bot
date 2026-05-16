@@ -620,7 +620,7 @@ async def dispatch_flight(interaction: discord.Interaction, departure: str, arri
 )
 # ==================== LIVE FLIGHTS COMMAND ====================
 
-@bot.tree.command(name="live", description="Show active Cedar Jet ME flights")
+@bot.tree.command(name="live", description="Show active MEAV flights")
 async def live(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
     
