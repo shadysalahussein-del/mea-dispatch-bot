@@ -620,12 +620,12 @@ async def dispatch_flight(interaction: discord.Interaction, departure: str, arri
 )
 # ==================== LIVE FLIGHTS COMMAND ====================
 
-@bot.tree.command(name="live", description="Show active MEAV flights")
+@bot.tree.command(name="live", description="Show active Cedar Jet ME flights")
 async def live(interaction: discord.Interaction):
     await interaction.response.defer(thinking=True)
     
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
             headers = {"Authorization": f"Bearer {IF_API_KEY}"}
             
             # Get sessions
@@ -656,7 +656,7 @@ async def live(interaction: discord.Interaction):
             
             # Build embed
             embed = discord.Embed(
-                title="✈️ LiveMEAV Flights",
+                title="Live MEAV Flights",
                 color=discord.Color.red()
             )
             
@@ -665,31 +665,39 @@ async def live(interaction: discord.Interaction):
                 username = flight.get("username", "Unknown Pilot")
                 flight_id = flight.get("flightId", "")
                 aircraft_id = flight.get("aircraftId", "")
-                
-                # Get aircraft name from cache
-                aircraft_name = MANUAL_AIRCRAFT.get(aircraft_id, aircraft_cache.get(aircraft_id, "Unknown Aircraft"))
                 livery_id = flight.get("liveryId", "")
-                livery_name = livery_cache.get(livery_id, "")                
-                # Get flight plan for departure/arrival
-                flight_plan = await get_flight_plan(expert_id, flight_id)
-                waypoints = flight_plan.get("waypoints", [])
-                dep_icao = waypoints[0] if len(waypoints) > 0 else "???"
-                arr_icao = waypoints[-1] if len(waypoints) > 1 else "???"
                 
-                # Get airport names from AIRPORT_INFO
+                # Get names from cache
+                aircraft_name = aircraft_cache.get(aircraft_id, "Unknown Aircraft")
+                livery_name = livery_cache.get(livery_id, "")
+                
+                # Get flight plan
+                try:
+                    flight_plan = await get_flight_plan(expert_id, flight_id)
+                    if flight_plan:
+                        waypoints = flight_plan.get("waypoints", [])
+                        dep_icao = waypoints[0] if waypoints else "???"
+                        arr_icao = waypoints[-1] if len(waypoints) > 1 else "???"
+                    else:
+                        dep_icao = "???"
+                        arr_icao = "???"
+                except Exception:
+                    dep_icao = "???"
+                    arr_icao = "???"
+                
+                # Get airport names
                 dep_name = AIRPORT_INFO.get(dep_icao, {}).get("city", dep_icao) if dep_icao != "???" else "Unknown"
                 arr_name = AIRPORT_INFO.get(arr_icao, {}).get("city", arr_icao) if arr_icao != "???" else "Unknown"
-
-                route_text = f"{dep_icao} → {arr_icao} ({dep_name} → {arr_name})"                
+                
+                route_text = f"{dep_icao} → {arr_icao} ({dep_name} → {arr_name})"
                 livery_text = f" ({livery_name})" if livery_name else ""
-
+                
                 embed.add_field(
-                    name=f"✈️ **{callsign}** - {username}",
-                    value=f"{route_text}\n️{aircraft_name}{livery_text}",
+                    name=f"**{callsign}** - {username}",
+                    value=f"{route_text}\n{aircraft_name}{livery_text}",
                     inline=False
-                )                
+                )
             
-            embed.set_footer(text=f"Last updated: {discord.utils.utcnow().strftime('%I:%M %p UTC')}")
             await interaction.followup.send(embed=embed)
             
     except Exception as e:
