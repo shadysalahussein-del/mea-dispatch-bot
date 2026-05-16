@@ -683,7 +683,7 @@ async def live(interaction: discord.Interaction):
                 route_text = f"{dep_icao} → {arr_icao} ({dep_name} → {arr_name})"
                 
                 embed.add_field(
-                    name=f"✈️ **{callsign}** - {username}"
+                    name=f"✈️ **{callsign}** - {username}",
                     livery_text = f" ({livery_name})" if livery_name else ""
                     value=f"📍 {route_text}\n✈️ {aircraft_name}{livery_text}",,
                     inline=False
