@@ -680,14 +680,15 @@ async def live(interaction: discord.Interaction):
                 dep_name = AIRPORT_INFO.get(dep_icao, {}).get("city", dep_icao) if dep_icao != "???" else "Unknown"
                 arr_name = AIRPORT_INFO.get(arr_icao, {}).get("city", arr_icao) if arr_icao != "???" else "Unknown"
                 
-                route_text = f"{dep_icao} → {arr_icao} ({dep_name} → {arr_name})"
-                
+                route_text = f"{dep_icao} → {arr_icao} ({dep_name} → {arr_name})
+"
+                livery_text = f" ({livery_name})" if livery_name else ""
+
                 embed.add_field(
                     name=f"✈️ **{callsign}** - {username}",
-                    livery_text = f" ({livery_name})" if livery_name else ""
-                    value=f"📍 {route_text}\n✈️ {aircraft_name}{livery_text}",,
+                    value=f"📍 {route_text}\n✈️ {aircraft_name}{livery_text}",
                     inline=False
-                )
+                )                
             
             embed.set_footer(text=f"Last updated: {discord.utils.utcnow().strftime('%I:%M %p UTC')}")
             await interaction.followup.send(embed=embed)
