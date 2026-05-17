@@ -6,6 +6,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 import asyncio
 import aiohttp
+import re
 
 # Infinite Flight Live API Configuration
 IF_API_KEY = "py711e1ri3456ayrs9zhtuanjzqhemh6"
@@ -648,7 +649,7 @@ async def live(interaction: discord.Interaction):
                 flights = data.get("result", [])
             
             # Filter for ME callsigns
-            me_flights = [f for f in flights if f.get("callsign", "").endswith("ME")]
+            me_flights = [f for f in flights if re.match(r"^\d{3}ME$", f.get("callsign", ""))]
             
             if not me_flights:
                 await interaction.followup.send("✈️ No Cedar Jet ME flights active right now")
