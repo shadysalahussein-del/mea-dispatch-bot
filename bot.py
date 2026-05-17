@@ -699,7 +699,8 @@ async def live(interaction: discord.Interaction):
                     inline=False
                 )
 
-                embed.set_footer(text=f"<t:{int(time.time())}:R>")
+                current_timestamp = int(time.time())
+                embed.set_footer(text=f"<t:{current_timestamp}:R>")
             
             await interaction.followup.send(embed=embed)
             
