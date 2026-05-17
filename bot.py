@@ -697,8 +697,9 @@ async def live(interaction: discord.Interaction):
                     name=f"**{callsign}** - {username}",
                     value=f"{route_text}\n{aircraft_name}{livery_text}",
                     inline=False
-                    embed.set_footer(text=f"<t:{int(time.time())}:R>")
                 )
+
+                 embed.set_footer(text=f"<t:{int(time.time())}:R>")
             
             await interaction.followup.send(embed=embed)
             
