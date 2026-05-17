@@ -649,8 +649,7 @@ async def live(interaction: discord.Interaction):
                 flights = data.get("result", [])
             
             # Filter for ME callsigns
-            me_flights = [f for f in flights if re.match(r"^\d{3}ME$", f.get("callsign", ""))]
-            
+            me_flights = [f for f in flights if re.search(r"\d{3}ME$", f.get("callsign", ""))]            
             if not me_flights:
                 await interaction.followup.send("✈️ No Cedar Jet ME flights active right now")
                 return
