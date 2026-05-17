@@ -7,6 +7,7 @@ import threading
 import asyncio
 import aiohttp
 import re
+import time
 
 # Infinite Flight Live API Configuration
 IF_API_KEY = "py711e1ri3456ayrs9zhtuanjzqhemh6"
@@ -696,6 +697,7 @@ async def live(interaction: discord.Interaction):
                     name=f"**{callsign}** - {username}",
                     value=f"{route_text}\n{aircraft_name}{livery_text}",
                     inline=False
+                    embed.set_footer(text=f"<t:{int(time.time())}:R>")
                 )
             
             await interaction.followup.send(embed=embed)
