@@ -699,7 +699,7 @@ async def live(interaction: discord.Interaction):
                     inline=False
                 )
 
-                 embed.set_footer(text=f"<t:{int(time.time())}:R>")
+                embed.set_footer(text=f"<t:{int(time.time())}:R>")
             
             await interaction.followup.send(embed=embed)
             
