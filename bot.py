@@ -651,7 +651,7 @@ async def live(interaction: discord.Interaction):
             # Filter for ME callsigns
             me_flights = [f for f in flights if re.search(r"\d{3}ME$", f.get("callsign", ""))]            
             if not me_flights:
-                await interaction.followup.send("✈️ No Cedar Jet ME flights active right now")
+                await interaction.followup.send("✈️ N MEAV fflights active right now")
                 return
             
             # Build embed
