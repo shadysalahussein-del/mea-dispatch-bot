@@ -7,7 +7,7 @@ import threading
 import asyncio
 import aiohttp
 import re
-import time
+import datetime
 
 # Infinite Flight Live API Configuration
 IF_API_KEY = "py711e1ri3456ayrs9zhtuanjzqhemh6"
@@ -699,9 +699,8 @@ async def live(interaction: discord.Interaction):
                     inline=False
                 )
 
-                current_timestamp = int(time.time())
-                embed.set_footer(text=f"<t:{current_timestamp}:R>")
-            
+                embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
+
             await interaction.followup.send(embed=embed)
             
     except Exception as e:
